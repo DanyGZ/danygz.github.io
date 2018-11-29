@@ -1,0 +1,4261 @@
+<!DOCTYPE html>
+<!--[if IE 9]>     <html class="no-js ie9"> <![endif]-->
+<!--[if gt IE 9]><!-->
+<html class='no-js'>
+<!--<![endif]-->
+<head>
+
+<title>Entrevista Test 1
+</title>
+<link href='/favicon.ico' rel='icon' type='image/x-icon'>
+<meta charset='utf-8'>
+<meta content='width=device-width' name='viewport'>
+<meta name="csrf-param" content="authenticity_token" />
+<meta name="csrf-token" content="Ea6tDxAy9Xu3Ms0kgngnaisN0K/MhfM5kJnPxSzybls0dIux2CZOjQsNipzd/CvNdG90hA1UYBkJFY08gldAjw==" />
+<link rel="stylesheet" media="screen" href="https://s.wapow.co/assets/mobile/styles-e770b002bc3f3e0f2a0e020b8247a0209204901a2023d054ab6af4ff2d34ba29.css" />
+
+<script src="https://s.wapow.co/assets/lib/jquery-c64a74367bda6ef8b860f19e74df08927ca99d2be2ac934e9e92d5fd361e0da4.js"></script>
+<script src="https://s.wapow.co/assets/candidate_mobile/dependencies-d944f5f5c8c30834ff9cda1a23180c146b15b31731411059e9afec6a2e3b7f82.js"></script>
+<script>
+
+/* eslint-disable */
+
+'use strict';
+/* eslint-enable */
+;
+// Wepow Application
+// =================
+window.Models = {};
+window.Collections = {};
+window.Views = {};
+
+// @param  {object} window                          [window object]
+// @param  {object} document                        [document object]
+// @param  {object} $                               [jQuery object]
+// @param  {property} undefined                     [undefined reference (undefined)]
+// @return {object}                                 [All methods by this module (private included for debug mode)]
+var wepow = (function(window, document, $, undefined) {
+    function loadSetup() {
+        var headers = {
+            'Accept-Language': wepow.settings.current_locale
+        };
+
+        // Settings for AJAX requests
+        $.ajaxSetup({
+            cache: false,
+            headers: headers
+        });
+    }
+
+    function basicAuthSetup() {
+        wepow.basicAuth = {
+            // This method is used to set the basicAuth settings. first
+            // param is a boolean that will set if basic auth is on or off.
+            // Second one is an optional object containing either username,
+            // password or both. Defaults are set on the wepow.settings
+            // object passed on init.
+            setCredentials: function(turn, credentials) {
+                credentials = credentials || {};
+
+                wepow.settings.basicAuth.on = turn;
+                _.extend(wepow.settings.basicAuth.credentials, credentials);
+
+                $.ajaxSetup({
+                    headers: {
+                        Authorization: this.getHeader()
+                    }
+                });
+            },
+
+            getHeader: function(credentials) {
+                credentials = _.extend({
+                    username: wepow.settings.basicAuth.credentials.username,
+                    password: wepow.settings.basicAuth.credentials.password
+                }, credentials);
+
+                function encode(credentials) {
+                    return 'Basic ' + btoa(window.unescape(encodeURIComponent(
+                    [credentials.username, credentials.password].join(':'))));
+                }
+
+                return credentials.username && credentials.password ? encode(credentials) : false;
+            }
+        };
+    }
+
+    function rootReady() {
+
+        if (wepow.settings.interview_code || wepow.settings.interview_public_link) {
+
+            basicAuthSetup();
+
+            loadApi().then(function() {
+                return Q.all([
+                    loadOrganization(),
+                    loadTeam(),
+                    loadUser(),
+                    loadApplication()
+                ]).then(buildApp);
+            }).done();
+        } else {
+            buildApp();
+        }
+    }
+
+    function loadApi() {
+        wepow.basicAuth.setCredentials(true, {
+            password: wepow.settings.interview_code || wepow.settings.interview_public_link
+        });
+
+        return wepow.api.fetch();
+    }
+
+    function loadApplication() {
+        return Q(wepow.models.get('application').fetch()).then(function() {
+            if (!wepow.models.get('application').embedded['wepow:candidate']) {
+                wepow.models.get('user').url = wepow.models.get('application').links['wepow:registration-form'].href;
+            }
+        });
+    }
+
+    function loadOrganization() {
+        if ( _.isEmpty(wepow.api.embedded['wepow:organization']) && wepow.api.links['wepow:organization']) {
+            wepow.organization = new Models.Organization();
+
+            return wepow.organization.fetch();
+        }
+
+        wepow.organization = new Models.Organization(wepow.api.embedded['wepow:organization']);
+
+        return wepow.organization;
+    }
+
+    function loadTeam() {
+        return Q.fcall(function() {
+            if (_.isEmpty(wepow.api.embedded['wepow:team']) && wepow.api.links['wepow:team']) {
+                wepow.team = new Models.Team();
+                wepow.team.url = wepow.api.links['wepow:team'].href;
+
+                return wepow.team.fetch();
+            }
+
+            wepow.team = new Models.Team(wepow.api.embedded['wepow:team']);
+
+            return wepow.team;
+        }, function(response) {
+            wepow.team = new Models.Team();
+
+            if (response.status === 404) {
+                wepow.router.force404 = true;
+            }
+
+            if (response.status === 403) {
+                _.delay(function() {
+                    window.location = '/';
+                }, 3000);
+            }
+
+            return wepow.team;
+        }).then(function(team) {
+            if (team.embedded['wepow:team:settings']) {
+                team.settings = new Models.Settings(team.embedded['wepow:team:settings']);
+            } else {
+                team.settings = new Models.Settings();
+            }
+
+            return wepow.team;
+        });
+    }
+
+    function loadUser() {
+        return Q.fcall(function() {
+            if (_.isEmpty(wepow.api.embedded['wepow:current-user']) && wepow.api.links['wepow:current-user']) {
+                wepow.user = new Models.UserBase();
+                wepow.user.url = wepow.api.links['wepow:current-user'].href;
+
+                return wepow.user.fetch();
+            } else {
+                wepow.user = new Models.UserBase(wepow.api.embedded['wepow:current-user']);
+            }
+
+            return wepow.user;
+        });
+    }
+
+    function buildApp() {
+        wepow.regions = {
+            content: new wepow.tools.Region('section[role="main"]')
+        };
+
+        wepow.settings.timeZones = new Collections.TimeZones();
+        wepow.load.layout();
+        startHistory();
+        wepow.events.trigger('app:built');
+    }
+
+    function startHistory() {
+        var paths = _.chain(window.location.pathname).split('/').compact().value(),
+            localeRegex = /^[a-z]{2}_[A-Z]{2}/,
+            routerRoot = '/';
+
+        if (paths[0] && (paths[0].length === 2 || paths[0].match(localeRegex)) ) {
+            routerRoot = '/' + paths[0] + routerRoot;
+        }
+
+        Backbone.history.start({pushState: true, root: routerRoot});
+        return wepow.events.trigger('wepow:HistoryStarted');
+    }
+
+    var Router = Backbone.Router.extend({
+        currentPath: ''
+    });
+
+    // Public methods
+    // --------------
+    return {
+        appName: 'candidate_site_mobile',
+        router: new Router(),
+
+        // {function} init
+        // ---------------
+        //
+        // @param {object} options                  [options set on document.ready]
+        //
+        // Application initialization function.
+        init: function(options) {
+            wepow.settings = _.extend(wepow.settings, options);
+
+            // Setting I18n locales
+            I18n.defaultLocale = wepow.settings.default_locale;
+            I18n.locale = wepow.settings.current_locale;
+            I18n.fallbacks = !wepow.settings.debug_enabled;
+
+            wepow.events = _.extend({}, Backbone.Events);
+
+            if (wepow.settings.debug_enabled && !wepow.settings.isIE_LT10) {
+                wepow.debug();
+            }
+
+            wepow.api = wepow.models.get('api');
+
+            // Load main Setup
+            loadSetup();
+
+            rootReady();
+
+            // Trigger application init event
+            return wepow.events.trigger('wepow:init');
+        },
+
+        // {function} debug
+        // ----------------
+        //
+        // @param {object} app                      [Reference to global object wepow]
+        debug: function() {
+            /*eslint-disable no-console */
+
+            // Log all events to console
+            this.events.on('all', function(eventName, param) {
+                if (param &&
+                    window.console &&
+                    window.console.group &&
+                    window.console.debug) {
+
+                    console.groupCollapsed('Event triggered: "' + eventName + '". Param received:');
+                    if ( _.isObject(param) ) {
+                        console.dir(param);
+                    } else {
+                        console.debug(param);
+                    }
+                    console.groupEnd();
+                } else if (window.console && window.console.info) {
+                    console.info('Event triggered: "' + eventName + '".');
+                }
+            });
+
+            // Window error handler.
+            window.onerror = function(errorMsg, url, lineNumber, column, errorObj) {
+                if (!wepow.settings.isIE_LT10 && window.console && window.console.error) {
+                    console.error(
+                        'Error: ' + errorMsg +
+                        ' Script: ' + url +
+                        ' Line: ' + lineNumber +
+                        ' Column: ' + column +
+                        ' StackTrace: ' + errorObj
+                    );
+                }
+            };
+
+            // Event pub.
+            return this.events.trigger('debug:init');
+
+            /*eslint-enable no-console */
+        },
+
+        // {function} ajaxDebug
+        // --------------------
+        //
+        // @param {object} event                    [Ajax event fired]
+        // @param {object} jqXHR                    [XHR object returned]
+        // @param {object} ajaxSettings             [Ajax Settings used]
+        // @param {object} thrownError              [Error message thrown]
+        //
+        // This function logs all ajax Errors to console, grouped by error.
+        ajaxDebug: function(event, jqXHR, ajaxSettings, thrownError) {
+            /*eslint-disable no-console */
+            if (!this.settings.isIE_LT10 && window.console.group && window.console.error) {
+                console.group('ERROR: ' + thrownError);
+                console.error('Error event:', event);
+                console.error('XHR object:', jqXHR);
+                console.error('Settings used:', ajaxSettings);
+                console.groupEnd();
+            }
+
+            return;
+            /*eslint-enable no-console */
+        }
+    };
+})(this, this.document, jQuery);
+// Settings.js
+// ===================
+
+// > http://wepow.com
+// > Owner: Enrique Ramirez
+// > This file stores the site-wide settings.
+// > BEWARE: User-defined settings should NOT be here.
+// > Please add them to:
+// > app/views/shared/_mew2_app_init.haml
+
+// This object stores settings from the application across the board.
+// @type {Object}
+wepow.settings = {
+
+//
+// Site-wide Settings
+// ------------------
+ 
+ 
+ 
+
+  supportedLocales: ['en','es','pt','de','fr', 'fr_CA','ja', 'it'],
+
+  // {boolean} true for IE 9 and below
+  isIE_LT10: $('html').is('.ie7, .ie8, .ie9'),
+
+  // {boolean} true for IE 8 and below
+  isIE_LT9: $('html').is('.ie7, .ie8'),
+
+  unlimited: 999999,
+
+  // {boolean} true for IE 7
+  isIE7: $('html').is('.ie7'),
+
+  defaultBrandingColour: '#00a4e4',
+
+  // {object} Cache Timestamps
+  swf_paths: {"link.swf":"https://s.wapow.co/assets/link-c0e490beb8d08c7e270f1e7953eb7d38c3b83295d0a905027923ba67f87463ea.swf","NinjaPlayer.swf":"https://s.wapow.co/assets/NinjaPlayer-0e922c83b66f77bd5a369ee7be2c816b748023f5bac14ea595b070b725c02343.swf","NinjaRecorder.swf":"https://s.wapow.co/assets/NinjaRecorder-0c89e5aa7c1b5b874a5a563c22abd52242917aaa30e1528b3a2b0d4f5e66d969.swf","NinjaRecruiterRecorder.swf":"https://s.wapow.co/assets/NinjaRecruiterRecorder-de46ec6f74fca5ba393c848c50f2b5bc62a0fa1b0576751a4aaf8c387d886a03.swf","NinjaInterview.swf":"https://s.wapow.co/assets/NinjaInterview-c8e50e75745696f66ef2974ca0415c921637467b4e25388328b37d20f78977bb.swf","NinjaTextFreeSetup.swf":"https://s.wapow.co/assets/NinjaTextFreeSetup-e82afd14b879243353427131a348826846ced3e8a43d2b87da1c6daf8dd4cf7b.swf","Settings.swf":"https://s.wapow.co/assets/Settings-4d2b29f8af6e8914d769dc27fa78092de799be36c2f042e979e37b9487a10216.swf","jwplayer.swf":"https://s.wapow.co/assets/jwplayer-b1270a163a9feebac8f6e8b12b63ebbddcefda0850a63bc6ea2029adc1fd30c3.swf","NinjaLiveInterview.swf":"https://s.wapow.co/assets/NinjaLiveInterview-a2ed9f467837fea8d9bc23e6a7b85795674fb30ec4dc3a8e81b23142ecbffe5e.swf","playerProductInstall.swf":"https://s.wapow.co/assets/playerProductInstall-05a1649c572994fa677cd1cff908d6e9354c5b66e322cef3f452092d73f0fc78.swf","LivePlayer.swf":"https://s.wapow.co/assets/LivePlayer-fa5d3bdc48633a5af4b646553dadd330e57122e37c4febf95e153e16f7f1240d.swf","comSetup.swf":"https://s.wapow.co/assets/comSetup-1dde4013e276fcda19e610e08e35247c1820d08962e96702adb690ac0829414d.swf","ResourcesPlayer.swf":"https://s.wapow.co/assets/ResourcesPlayer-4b899a2b0766179c0da709cbd9dc73cc687c232fbbf62eba6ad3ec15ac83e34e.swf","video-js.swf":"https://s.wapow.co/assets/video-js-d40b540e1498bc8d9c138917a0517d30934148f707c14f5bb4bb6a80a716e096.swf","Recorder.swf":"https://s.wapow.co/assets/Recorder-16d5feb411cc6a7d8f0890c9a8c9371b9264c5c25f1cffc59777661a526f8bc2.swf"},
+
+  // {string} Default locale
+  default_locale: 'en',
+
+  // {string} Google API Key
+  google_api_key: 'ABQIAAAACFXGHkUR2i0QfGN_A-pzsBQPbsv7oR1fkVQYfGK0g66gvhApohSOg2xcCLSVZqv9_xvjJJsBP0EniA',
+
+  // {string} Intercom App Id
+  intercom_app_id: '',
+
+  // {string} Stripe API Key
+  stripe_api_key: 'pk_test_q9DBQ7VuZkiubdte7AYPQ8LJ',
+
+  // {string} Tokbox API Key
+  tokbox_api_key: '45497522',
+
+  // {string} Tokbox Test API Key
+  tokbox_test_api_key: '45597442',
+
+  // {string} Minimum flash version required
+  minimum_flash_version: '10.3.0',
+
+  // {string} Multiregion Node Info
+  multiregion_service: 'https://media.wapow.co/wowza_node_info',
+
+  // {boolean} Debug enabled?
+  debug_enabled: true,
+
+  // {string} HQ image path
+  hqimage: 'https://s.wapow.co/assets/swf_test/hqimage-ebacfe9245fc0c31908f7c72327b85a4dab69b2e660a964eecd5d2a5061e4267.jpg',
+
+  // {string} LQ image path
+  lqimage: 'https://s.wapow.co/assets/swf_test/lqimage-900afd56beca6c08afa1d73b756621aa62864d2d7609fd7798be7af21701cfd8.jpg',
+
+    // {string} Ping test image path
+  ping_test_image: 'https://s.wapow.co/assets/swf_test/ping-test-ca938cd6d8d214e602f4e6c30bb37fee0da0f6e0a4f571949c6ddd4d69414648.png',
+
+    // {string} Flash blocked image path
+  flash_blocked_image: 'https://s.wapow.co/assets/icons/flash_blocked-0c82ea2e684e421d20fde319702fbd09a6f4fe5d2b978d9dce514b785ff0feea.png',
+
+  // {string} Amazon ping test
+  
+    amazon_ping_test_image: 'https://integration-ovia-thumbnails.s3.amazonaws.com/pixel-test.png',
+  
+
+  // {boolean} Wheter to show the fixed aside help button
+  show_snap_engage_button: false,
+
+  // {boolean} History Start (wether to start Backbone.history automatically or not)
+  historyStart: true,
+
+  // {boolean} autoFetchAPI
+  // ----------------------
+  // Will fetch wepow.settings.url.rootAPI right before the
+  // module loads
+  autoFetchAPI: true,
+
+  // {object} Basic Auth Options
+  basicAuth: {
+
+    // {boolean} Basic Auth on/off switch
+    on: false,
+
+    // {object} Credentials. These can be changed at any time.
+    credentials: {
+      username: 'wepow',
+      password: ''
+    }
+  },
+
+  // APIs
+  url: {
+    rootAPI: '/api',
+    API: '//api.wapow.co',
+    recruiterAPI: '//recruiter-api.wapow.co',
+    interviewingAPI: '//interviewing-api.wapow.co',
+    
+    trackerAPI: '//tracker.wapow.co/events'
+    
+  },
+
+  // Insights related keys
+  insights: {
+    application_statuses: ["new", "sent", "delivered", "bounced", "opened", "started", "in_progress", "completed", "opted_out"],
+    evaluation_score_values: [0, 1, 2, 3, 4],
+    evaluation_score_names: ["very_bad", "poor", "fair", "good", "excellent"]
+  },
+
+  // Website URLs
+  external: {
+    firefox_homepage: 'https://www.mozilla.org/en-US/firefox/new/',
+    chrome_homepage: 'https://www.google.com/chrome',
+    about: 'https://www.wepow.com/en/company',
+    blog: 'https://www.wepow.com/en/blog/',
+    lenovo_settings: {
+      en: 'https://support.wepow.com/hc/en-us/articles/115004548528',
+      es: 'https://support.wepow.com/hc/es-419/articles/115004548528'
+    },
+    candidate_support: {
+      en: 'https://support.wepow.com/hc/en-us#category_204003167',
+      es: 'https://support.wepow.com/hc/es-419#category_204003167'
+    },
+    recruiter_support: {
+      en: 'https://support.wepow.com/hc/en-us#category_204003167',
+      es: 'https://support.wepow.com/hc/es-419#category_204003167'
+    },
+    contact: {
+      en: 'https://www.wepow.com/en/contact',
+      es: 'https://www.wepow.com/es/contact',
+      de: 'https://www.wepow.com/de/contact'
+    },
+    homepage: {
+      en: 'https://www.wepow.com/en',
+      es: 'https://www.wepow.com/es',
+      de: 'https://www.wepow.com/de'
+    },
+    live_interview_support: 'https://support.wepow.com/hc/en-us/articles/205301777',
+    sign_up_terms_and_conditions: 'https://www.wepow.com/en/agreement-terms',
+    support: {
+      en: 'https://support.wepow.com/hc/en-us',
+      es: 'https://support.wepow.com/hc/es-419',
+      de: 'https://support.wepow.com/hc/de'
+    },
+    live_conference_call_numbers: {
+      en: 'https://support.wepow.com/hc/en-us/articles/115002618934',
+      es: 'https://support.wepow.com/hc/es-419/articles/115002618934'
+    },
+    system_requirements: {
+        en: 'https://support.wepow.com/hc/en-us/articles/202084758-System-Requirements#hardware',
+        es: 'https://support.wepow.com/hc/es-419/articles/202084758-Requerimientos-de-sistema#hardware'
+    },
+    chrome_flash_unblocking: {
+        en: 'https://support.google.com/chrome/answer/142064?hl=en',
+        es: 'https://support.google.com/chrome/answer/142064?hl=es',
+        de: 'https://support.google.com/chrome/answer/142064?hl=de',
+        fr: 'https://support.google.com/chrome/answer/142064?hl=fr',
+        pt: 'https://support.google.com/chrome/answer/142064?hl=pt',
+        ja: 'https://support.google.com/chrome/answer/142064?hl=ja'
+    },
+    safari_adobe_support: {
+        en: 'https://helpx.adobe.com/flash-player/kb/enabling-flash-player-safari.html',
+        es: 'https://helpx.adobe.com/es/flash-player/kb/enabling-flash-player-safari.html'
+    },
+    privacy_policy: {
+      en: 'https://www.wepow.com/en/privacy-policy',
+      es: 'https://www.wepow.com/es/privacy-policy',
+      de: 'https://www.wepow.com/de/privacy-policy'
+    },
+    terms_and_conditions: {
+      en: 'https://www.wepow.com/en/terms-conditions',
+      es: 'https://www.wepow.com/es/terms-conditions',
+      de: 'https://www.wepow.com/de/terms-conditions'
+    },
+    getting_started: {
+      en: 'https://support.wepow.com/hc/en-us/articles/115000721388',
+      es: 'https://support.wepow.com/hc/es-419/articles/115000721388',
+      de: 'https://support.wepow.com/hc/de/articles/115000721388',
+      fr: '',
+      pt: '',
+      ja: ''
+    },
+    live_conference_support: {
+      en: 'https://support.wepow.com/hc/en-us/articles/205301777',
+      es: 'https://support.wepow.com/hc/es-419/articles/205301777'
+    },
+    device_troubleshooting: {
+      en: 'https://support.wepow.com/hc/en-us/articles/201824846-Webcam-Problems',
+      es: 'https://support.wepow.com/hc/es-419/articles/201824846'
+    },
+    microphone_settings: {
+      es: 'https://support.wepow.com/hc/es-419/articles/115003788088',
+      en: 'https://support.wepow.com/hc/en-us/articles/115003788088'
+    },
+    mobile_app_links: {"android":{"store":"https://play.google.com/store/apps/developer?id=WePow.","recruiter":"https://play.google.com/store/apps/details?id=com.wepow.recruiter\u0026referrer=utm_source%3D{campaign}","candidate":"https://play.google.com/store/apps/details?id=com.wepow.candidate","live":"https://play.google.com/store/apps/details?id=com.wepow.live"},"ios":{"store":"https://itunes.apple.com/us/artist/wepow-inc./id538178585","recruiter":"https://itunes.apple.com/app/apple-store/id632743601?pt=1026671\u0026ct={campaign}\u0026mt=8","candidate":"https://itunes.apple.com/us/app/wepow-candidate/id538178582","live":"https://itunes.apple.com/us/app/wepow-live/id1037409610"}}
+  },
+
+  //Emails
+  emails: {
+    contact: 'contact@wopow.co',
+    feature_request: '["oscar@wepow.com", "diego@wepow.com"]',
+    no_reply: 'no-reply@wopow.co',
+    support: 'support@wopow.co'
+  },
+
+//
+// URLs
+// ----
+
+  // {object} JavaScript libraries URLs
+  js_lib: {
+    filesystem: 'https://s.wapow.co/assets/idb.filesystem-d028c935878fdab9f13d2e3652754a821802f23085a8396c57aa9db1b69c2159.js',
+    videojs_hls: 'https://s.wapow.co/assets/videojs-contrib-hls-59c3123d9d22759a68bbb54c2d2317179749abbd8712f173ad2c3f5b4b5d8486.js',
+    backbone: 'https://s.wapow.co/assets/lib/backbone-3dd6732dfa24d1d79279ab81672b2092604b543489af42c7eba281f990c0cc43.js',
+    backbone_syphon: 'https://s.wapow.co/assets/lib/backbone.syphon-4ac338729e03091dc177fd3a0e80908811f0b16ea68282d45e6bca0b374eb5b3.js',
+    colorpicker: 'https://s.wapow.co/assets/plugins/jquery_colorpicker/javascripts/colorpicker-91bb552047acae0e18ac55cf7dc4b4588cdd6c3bce49b198b3f1235dfa3455b2.js',
+    jquery_ui: 'https://s.wapow.co/assets/lib/jquery-ui-2c70a82544b890abbff4aff9a617db10a71c97bc2bf1b5c46d09b331df0e0604.js',
+    json: 'https://s.wapow.co/assets/lib/json3-3f4e1ab50e3ec309b2cf937e7c65e242623bda053aef32aa95ace5cfa0fc4bcd.js',
+    swfobject: 'https://s.wapow.co/assets/lib/swfobject-3f589ba3db8f6e991ddab634e25a0649d42be2f654fecf24dd7772ab4f4a3ba8.js',
+    lodash: 'https://s.wapow.co/assets/lib/lodash.compat-bc0171c3b6577e47c295d3c67d345cf0aca635576aaf8350ccb3d7658e2d7ed8.js',
+    backbone_hal: 'https://s.wapow.co/assets/lib/backbone.hal-53f9dbc647163812f597dacd74286746d9216d54ab67a37dfb0511eac8b1c254.js',
+    uritemplate: 'https://s.wapow.co/assets/lib/uritemplate-c5a622fc112361a2c05da86eb4af001db93e9ddd17c7964330b5f22df2d1931c.js',
+    jquery_ui_datetime: 'https://s.wapow.co/assets/plugins/jquery_ui_datetimepicker/jquery-ui-timepicker-addon-4eebd2740e7b40657d23e719d5cabb566d1f2a6ce5c986c6dc19f22a5a7c3cab.js',
+    cleditor: 'https://s.wapow.co/assets/plugins/jquery_cleditor/javascripts/jquery.cleditor-4cb663cad20de4c9e5ca7223bfa51188c548b9c74d74a1a3ebb346fff7ea1a99.js',
+    base64: 'https://s.wapow.co/assets/lib/base64-b1f5f0ddc122dd2b54909e535ba17861d19bd150a1066e435be338c92c1cae1b.js',
+    phonePicker: 'https://s.wapow.co/assets/plugins/jquery_intl_tel_input/intlTelInput-39c26fb0232c7d3eda672554be8db0f710d6db4f0803bdbc03a3ad974c31c326.js',
+    phonePickerUtils: 'https://s.wapow.co/assets/plugins/jquery_intl_tel_input/utils-7281f7439614a34a37bda00e0349e30f13206e3325280ddb6a6eb9bab5f9fe5c.js',
+    q: 'https://s.wapow.co/assets/lib/q-fb356b90e0a99e0acf623133888ef9aa5cad7cf9590c38d80b8306a59e3af227.js',
+    fullcalendar: 'https://s.wapow.co/assets/fullcalendar-45b8686b8e46a496def38c2e0bb5b556ccd3bac788f513261a9dffeca14a0f68.js',
+    fullcalendarLocales: 'https://s.wapow.co/assets/locale-all-df436a3c5cd1726ec9c1eb635d3ed765cc29483e6cae9620d93a3e036e4c48e7.js',
+    timepicker: 'https://s.wapow.co/assets/plugins/jquery_timepicker/jquery.timepicker-dcf75fa6185d8d33f9494c30dcde19d24790485e610fde6ae966c1d57b157f3a.js',
+    quilljs: 'https://s.wapow.co/assets/quill-012fb526a530d9f162dd688a2f314b146b87a8c6a6f682218400a134ba28e20e.js',
+
+    // Third Party...
+    stripe: '//js.stripe.com/v2/',
+    snapABug: '//commondatastorage.googleapis.com/code.snapengage.com/js/29ef7488-dd68-40c0-8ba0-0aefd73a8a6c.js',
+    snapABugLive: '//storage.googleapis.com/code.snapengage.com/js/83e8501c-897c-4051-aa9f-49bb7dc17eff.js',
+    googleJsApi: '//www.google.com/jsapi?key=ABQIAAAACFXGHkUR2i0QfGN_A-pzsBQPbsv7oR1fkVQYfGK0g66gvhApohSOg2xcCLSVZqv9_xvjJJsBP0EniA',
+    intercom: '//widget.intercom.io/widget/'
+  }
+};
+(function() {
+    // batchActions
+    // ------------
+    // Usage:
+    //
+    // 1. Collection must be paginated (add to initialize method: `this.pageable();`.
+    //    See collection.pagination.js for more info).
+    // 2. Frontend has no control (and should not have it) over which  buttons are displayed.
+    //    Collection's batch actions are interpreted by backend's returned links.
+    //    We look for links with `wepow:batch-job:ACTIONNAME` as their key.
+    //    As long as the link exists AND the `ACTIONNAME` is in the `_settings.displayOrder`
+    //    variable below, the button will appear.
+    // 3. Batch action's "enable" and "visible" rules are in the below variables.
+    //    If you need a custom function, add it to `collection._customBatchFilters`.
+    //    E.g.:
+    //
+    //    var Collection = Backbone.Collection.extend({
+    //        _customBatchFilters: {
+    //            enable: {
+    //                'ACTIONNAME': function() {
+    //                     // This function's context (`this` value) will ALWAYS be the collection,
+    //                     // since we always `.call()` it.
+    //                     return this.where({selected: true});
+    //                 }
+    //            }
+    //        }
+    //    });
+    var _settings = {
+        displayOrder: ['change-evaluation-status', 'share-application', 'share', 'unshare', 'resend', 'send-reminder', 'send-evaluation-notification', 'send-sms-reminder', 'close', 'open', 'tag', 'share-conference', 'cancel', 'update-deadline', 'delete', 'destroy'],
+        visibleRules: {
+            'send-reminder': function() {
+                return _incompleteFilterSelected.call(this);
+            },
+            'send-sms-reminder': function() {
+                return _incompleteFilterSelected.call(this);
+            },
+            'update-deadline': function() {
+                return _incompleteFilterSelected.call(this);
+            },
+            'share-application': function() {
+                return _allOrCompletedFilterSelected.call(this);
+            },
+            'send-evaluation-notification': function() {
+                return _allOrCompletedFilterSelected.call(this);
+            },
+            'change-evaluation-status': function() {
+                return _allOrCompletedFilterSelected.call(this);
+            }
+        },
+        enableRules: {
+            'close': function() {
+                var cantClose = ['draft', 'closed'],
+                    selected = this.where('selected'),
+                    status = this.chain().filter('attributes.selected').pluck('attributes.status').uniq().value();
+
+                return this.meta('selectAllQuery') || selected.length && _.intersection(cantClose, status).length < 1;
+            },
+            'open': function() {
+                var cantOpen = ['draft', 'active', 'expired'],
+                    selected = this.where('selected'),
+                    status = this.chain().filter('attributes.selected').pluck('attributes.status').uniq().value();
+
+                return this.meta('selectAllQuery') || selected.length && _.intersection(cantOpen, status).length < 1;
+            },
+            'share-application': function() {
+                var selectAllQuery = this.meta('selectAllQuery'),
+                    selected = this.where({ selected: true }),
+                    shareable = this.getShareable ? this.getShareable({ selected: true }).length : null;
+
+                return selectAllQuery || selected.length === shareable;
+            },
+            'send-evaluation-notification': function() {
+                var completed = this.where({status: 'completed', selected: true, anonymized: false}),
+                    selected = this.where({selected: true}),
+                    statuses = _.chain(selected).pluck('attributes.evaluation_status').uniq().value();
+
+                return completed.length === selected.length && statuses.length === 1 && statuses[0] !== 'pending';
+            },
+            'change-evaluation-status': function() {
+                var completed = this.where({status: 'completed', selected: true, anonymized: false}),
+                    selected = this.where({selected: true});
+
+                return completed.length === selected.length;
+            },
+            'send-reminder': function() {
+                return this.filter(function(model) {
+                    return model.get('selected') && _.isUndefined(model.links['wepow:application:send-reminder']);
+                }).length === 0;
+            },
+            'send-sms-reminder': function() {
+                var selected = this.where('selected'),
+                    canSMS = selected.filter(function(model) {
+                        return model.links['wepow:application:send-reminder'] && model.embedded['wepow:candidate'].mobile;
+                    });
+
+                return canSMS.length === selected.length || this.meta('selectAllQuery');
+            },
+            'cancel': function() {
+                var selectAllQuery = this.meta('selectAllQuery'),
+                    selected = this.where({ selected: true }),
+                    cancellable = this.getCancellable({ selected: true });
+
+                return selectAllQuery || selected.length === cancellable.length;
+            },
+            'share-conference': function() {
+                var selectAllQuery = this.meta('selectAllQuery'),
+                    selected = this.where({selected: true}),
+                    shareable = this.getShareable({selected: true});
+
+                return selectAllQuery || selected.length === shareable.length;
+            },
+            'update-deadline': function() {
+                var selectAllQuery = this.meta('selectAllQuery'),
+                    selected = this.where({ selected: true }),
+                    updatable = this.getDeadlineUpdatable ? this.getDeadlineUpdatable({ selected: true }).length : null;
+
+                return selectAllQuery || selected.length === updatable;
+            }
+        }
+    };
+
+    // getBatchActionsJSON
+    // -------------------
+    // Returns the batchActions JSON.
+    Backbone.Collection.prototype.getBatchActionsJSON = function() {
+        var selected = this.where('selected'),
+            collection = this;
+
+        return _.chain(this.links).pick(function(value, key) {
+            return _.contains(key, 'batch-job');
+        }).map(function(value, key) {
+            var action = {},
+                enableRule,
+                visibleRule;
+
+            action.links = value;
+            action.name = _.last( key.split(':') );
+            action.text = I18n.t('actions.' + action.name, {defaultValue: ''});
+
+            enableRule = _.get(collection, '_customBatchFilters.enable.' + action.name) || _settings.enableRules[action.name],
+            visibleRule = _.get(collection, '_customBatchFilters.visible.' + action.name) || _settings.visibleRules[action.name];
+
+            if (visibleRule) {
+                action.visible = visibleRule.call(collection);
+            } else {
+                action.visible = true;
+            }
+
+            if (enableRule) {
+                action.enabled = selected.length && enableRule.call(collection);
+            } else {
+                action.enabled = selected.length;
+            }
+
+            return action;
+          }).groupBy('name').thru(function(array) {
+            return _.map(_settings.displayOrder, function(i) {
+                return _.first(array[i]);
+            });
+          }).compact().value();
+    };
+
+    // batch
+    // -----
+    // @param {string} action             [Batch action to perform]
+    // @param {object} data               [Data to send (if any)]
+    //
+    // Runs a batch action. Returns a promise.
+    Backbone.Collection.prototype.batch = function(action, data, options) {
+        var selected = _.chain(this.models).filter('attributes.selected').pluck('id').value(),
+            batch = _.chain(this.links).find(function(value, key) {
+                return _.contains(key, 'batch-job:' + action);
+            }).value(),
+            collection = this,
+            query,
+            url;
+
+        options = _.extend({}, options);
+
+        if (!this.batchJobs) {
+            this.batchJobs = new Collections.BatchJobs();
+            this.listenTo(this.batchJobs, 'finished', _.debounce(function(json) {
+                collection.trigger('batchJob:' + json.action + ':finished', json);
+                collection.fetch();
+            }, 100));
+        }
+
+        data = {
+            batch_job_params: data,
+            resource: this.itemRel.replace('wepow:', '')
+        };
+
+        if (collection.meta('resource_id')) {
+            data.resource_id = collection.meta('resource_id');
+        }
+
+        if (this.meta('selectAllQuery')) {
+            url = _.find(batch, {name: 'query'}).href;
+            query = _.chain(this._filters).omit(['page', 'per_page', 'sort_direction', 'sort_column']).pick(_.identity).value();
+            query = _.extend({query: ':AyB:'}, query);
+            data = _.extend(data, query);
+        } else {
+            url = _.find(batch, {name: 'ids'});
+            url = url ? url.href : batch.href;
+            data.ids = selected;
+        }
+
+        url = UriTemplate.parse(url).expand({});
+
+        return this.batchJobs.createNew(data, {
+            url: url
+        }).then(function() {
+            if (options.keepSelection) {return;}
+
+            collection.forEach(function(model) {
+                model.set('selected', false, {silent: true});
+            });
+            collection.meta('selectAllQuery', false);
+            collection.trigger('change:selected');
+        });
+    };
+
+    // hasBatchActions
+    // ---------------
+    // Quick function that returns true if there are batch actions available.
+    Backbone.Collection.prototype.hasBatchActions = function() {
+        return _.some(this.links, function(value, key) {
+            return _.contains(key, 'batch-job');
+        });
+    };
+
+    function _allOrCompletedFilterSelected() {
+        var evaluationStatus = this._filters.evaluation_status,
+            status = this._filters.status;
+
+        return _.isUndefined(evaluationStatus) && _.isUndefined(status) ||
+               _.contains(status, 'completed') ||
+               _.contains(['pending', 'approved', 'dismissed', 'hired'], evaluationStatus) ||
+               !this.filterOptions().length > 1;
+    }
+
+    function _incompleteFilterSelected() {
+        var evaluationStatus = this._filters.evaluation_status,
+            status = this._filters.status;
+
+        return !(_.contains(status, 'completed') || _.contains(['pending', 'approved', 'dismissed', 'hired'], evaluationStatus) ||
+               !this.filterOptions().length > 1);
+    }
+
+    // notifyJS styles
+    if ($.notify) {
+        $.notify.addStyle('progress', {
+            html: '<div class="batch-progress-wrapper" data-notify-html></div>'
+        });
+    }
+})();
+// Backbone.Collection.createNew
+// -----------------------------
+// @param {object} data         [Data for the model (not a model instance)]
+// @param {object} options      [Options to be passed to model.save()]
+//
+// So, it turns out that creating a new collection model is more of a
+// pain in the ass than we thought if we want to wait for the server
+// to acknowledge the model BEFORE adding it to the collection.
+//
+// I'll try to put it simply: if you write:
+//
+//     collection.create({name: 'Enrique'});
+//
+// and there's an error, you are now stuck with a useless HAL model
+// on your collection (no links, no url, no nothing), plus you don't
+// get the XHR object and a lot other nasties. You then go:
+//
+//     collection.create({name: 'Enrique'}, {wait: true});
+//
+// And that should solve it, right? Wrong. This will return an error
+// stating that backbone can't find an URL. What's happening is that,
+// since the model is not in a collection, it can't get the URL from
+// it, and since you only set an attribute... well, there's no URL.
+//
+// So in order to solve both of these problems, this function was
+// born. It will return a newly created instance of the model that is
+// already added to the collection OR return false, without useless
+// models in your collection.
+//
+// This method will return the model instance if things went right
+// or the jqXHR if things went wrong.
+Backbone.Collection.prototype.createNew = function(data, options) {
+    var addOptions = _.extend({silent: true}, _.pick(options, 'at')),
+        model = this.add(data, addOptions),
+        urlFunction = model.url,
+        that = this;
+
+    model.url = this.url;
+
+    return Q( model.save(null, options) ).then(function() {
+        model.url = urlFunction;
+        model.trigger('created', model);
+        return model;
+    }, function(jqXHR) {
+        that.remove(model);
+        throw jqXHR;
+    });
+};
+Backbone.Collection.prototype.fetch = _.wrap(Backbone.Collection.prototype.fetch, function(fetch, options) {
+    var data;
+
+    options = options || {};
+    options.success = options.success || _.noop;
+
+    options.success = _.wrap(options.success, function(success, instance, response, options) {
+        instance.ready = true;
+
+        return success(instance, response, options);
+    });
+
+    if (this._filters) {
+        data = _.omit(this._filters, function(value) {
+          return _.isUndefined(value) || _.isNull(value);
+        });
+
+        options.data = _.extend(data, options.data);
+    }
+
+    if (this.tempUrl) {
+        options.url = this.tempUrl;
+    }
+
+    if (_.get(options, 'remove') !== false) {
+        delete this._loaded;
+    }
+
+    return fetch.call(this, options);
+});
+// Backbone.Collection.fetchOne
+// ----------------------------
+// @param {string} url             [The URL of the resource you want to add]
+//
+// There will be times where you need a resource and all you have is
+// it's URL. Or maybe you have the ID but the collection does not have
+// links (templated or otherwise). Basically, when you have the URL
+// of an item that belongs in a collection and want to retrieve it,
+// WHO YOU GONNA CALL? GHOSTBUS... I mean, fetchOne!
+//
+// This method will:
+//   1. Create a new model with only an URL attribute.
+//   2. Add it to the collection.
+//   3. Fetch the model.
+//   4. Ultimately, it will return the model.
+Backbone.Collection.prototype.fetchOne = function(url, options) {
+    var collection = this,
+        model;
+
+    options = _.extend({add: true}, options);
+
+    return Q.fcall(function() {
+        model     = new collection.model();
+        model.url = url;
+
+        return model.fetch();
+    }).then(function() {
+
+        if (options.add) {
+            collection.add(model);
+        }
+
+        return model;
+    });
+};
+// Backbone.Collection.filterOptions
+// ---------------------------------
+// Returns an array with the filter options for the collection URL.
+Backbone.Collection.prototype.filterOptions = function() {
+    var url = this.links[this.itemRel + 's'];
+
+    if (!url) {return [];}
+
+    return UriTemplate.parse(url.href).expressions[1].varspecs;
+};
+// Backbone.Collection.getAll
+// --------------------------
+// @param {boolean} fetch           [Force fetch]
+// @param {object} options          [Options to pass]
+//
+// Returns all models from current collection. It will do a collection.fetch
+// if the collection was never fetched. You can pass options.fetch
+// as true to trigger a fetch regardless of the fetched status.
+Backbone.Collection.prototype.getAll = function(fetch, options) {
+    var collection = this;
+
+    return Q.fcall(function() {
+        return collection.ready;
+    }).then(function(ready) {
+        if (!ready || fetch) {
+            return collection.fetch(options);
+        }
+
+        return collection;
+    }).then(function() {
+        return collection.models;
+    });
+};
+// Backbone.Collection.getOne
+// --------------------------
+// @param {object} query            [Search query]
+//
+// Finds an element in the collection. If it's not there, fetches it
+// from server.
+Backbone.Collection.prototype.getOne = function(query) {
+    var collection = this;
+
+    return Q.fcall(function() {
+        return collection.findWhere(query);
+    }).then(function(model) {
+        if (model) {return model;}
+
+        return Q.fcall(function() {
+            if (collection.links[collection.itemRel]) {return;}
+
+            return collection.syncHead();
+        }).then(function() {
+            var uri = UriTemplate.parse(collection.links[collection.itemRel].href);
+
+            return Backbone.sync('GET', collection, {url: uri.expand(query)});
+        }).then(function(data) {
+            return new collection.model(data);
+        });
+    });
+};
+Backbone.Collection.prototype.meta = function(prop, value, options) {
+    options = options || {};
+
+    if (this._meta === undefined) {
+        this._meta = {};
+    }
+
+    if (value === undefined) {
+        return this._meta[prop];
+    } else if (this._meta[prop] === value) {
+        return;
+    } else {
+        this._meta[prop] = value;
+
+        if (!options.silent) {
+            this.trigger('change:meta:' + prop);
+        }
+    }
+
+    return this;
+};
+(function() {
+
+    // Backbone.Collection.getPage
+    // ---------------------------
+    // @param {object} options             [pagination options ('filters')]
+    //
+    // Makes this collection a pageable one. Pass options with a `filter` key
+    // to add or override the default filters.
+    Backbone.Collection.prototype.pageable = function(options) {
+        var defaults = {
+            page: 1,
+            per_page: 10,
+            sort_direction: 'descending',
+            owner: 'self',
+            follower: 'self',
+            sort_column: undefined,
+            query: undefined
+        };
+
+        options = options || {};
+
+        if (!this._filters) {
+            defaults = _.extend(defaults, options.filters);
+
+            this._defaults = _.clone(defaults);
+            this._filters = defaults;
+        }
+    };
+
+    // Backbone.Collection.getPage
+    // ---------------------------
+    // @param {string/int} requested    [Requested page ('next', 'previous', 'first', 'last' or a number)]
+    // @param {object} options          [Options sent directly to Backbone.fetch]
+    //
+    // Gets requested page. Returns a promise that, once resolved will return the
+    // models.
+    Backbone.Collection.prototype.getPage = function(requested, options) {
+        var promise;
+
+        switch (requested) {
+            case 'next':
+                promise = _nextPage.call(this, options);
+            break;
+
+            case 'previous':
+                promise = _previousPage.call(this, options);
+            break;
+
+            case 'first':
+                promise = _firstPage.call(this, options);
+            break;
+
+            case 'last':
+                promise = _lastPage.call(this, options);
+            break;
+
+            default:
+                promise = _jumpToPage.call(this, requested, options);
+            break;
+        }
+
+        return promise;
+    };
+
+    // Backbone.Collection.getPaginationJSON
+    // -------------------------------------
+    //
+    // Returns pagination's data for display purposes.
+    Backbone.Collection.prototype.getPaginationJSON = function() {
+        return {
+            filters: _.omit(this._filters, ['page', 'per_page']),
+            count: this.attributes.count,
+            total_pages: _totalPages(this),
+            page: this._filters.page,
+            per_page: this._filters.per_page
+        };
+    };
+
+    // Backbone.Collection.query
+    // -------------------------
+    //
+    // @param {object} filters          [Filters to apply]
+    // @param {object} options          [Options sent directly to Backbone.fetch]
+    //
+    // Sets `filters` and automatically fetches. Pass `noFetch: true` in the
+    // options to prevent automatic fetching with the new filters.
+    Backbone.Collection.prototype.query = function(filters, options) {
+        var collection = this,
+            difference = _.keys(filters);
+
+        options = options || {};
+
+        this._filters = _.extend(this._filters, filters);
+
+        _.each(difference, function(key) {
+            collection.trigger('pagination:filters:change:' + key, filters[key]);
+        });
+
+        if (options.noFetch) {
+            delete options.noFetch;
+            return collection.models;
+        }
+
+        return Q( this.fetch(options) ).then(function() {
+            return collection.models;
+        });
+    };
+
+    // Backbone.Collection.resetPaginationDefaults
+    // -------------------------------------------
+    // Resets filters to defaults.
+    Backbone.Collection.prototype.resetPaginationDefaults = function() {
+        this._filters = _.clone(this._defaults);
+        return this;
+    };
+
+    // Private methods
+    // ---------------
+    function _nextPage(options) {
+        var current = this._loaded ? _.max(this._loaded) : this._filters.page,
+            total = _totalPages(this),
+            defer;
+
+        if (current === total) {
+            defer = Q.defer();
+
+            defer.resolve(this.models);
+            return defer.promise;
+        }
+
+        return _fetchPage.call(this, current + 1, options);
+    }
+
+    function _previousPage(options) {
+        var current = this._loaded ? _.min(this._loaded) : this._filters.page,
+            defer;
+
+        if (current <= 1) {
+            defer = Q.defer();
+
+            defer.resolve(this.models);
+            return defer.promise;
+        }
+
+        return _fetchPage.call(this, current - 1, options);
+    }
+
+    function _firstPage(options) {
+        var current = this._filters.page,
+            defer;
+
+        if (current === 1) {
+            defer = Q.defer();
+
+            defer.resolve(this.models);
+            return defer.promise;
+        }
+
+        return _fetchPage.call(this, 1, options);
+    }
+
+    function _lastPage(options) {
+        var current = this._filters.page,
+            total = _totalPages(this),
+            defer;
+
+        if (current === total) {
+            defer = Q.defer();
+
+            defer.resolve(this.models);
+            return defer.promise;
+        }
+
+        return _fetchPage.call(this, total, options);
+    }
+
+    function _jumpToPage(page, options) {
+        var current = this._filters.page,
+            total = _totalPages(this),
+            defer;
+
+        if (page === current || total < page) {
+            defer = Q.defer();
+
+            return defer.resolve(this.models);
+        }
+
+        return _fetchPage.call(this, page, options);
+    }
+
+    function _totalPages(collection) {
+        return Math.ceil(collection.attributes.count / collection._filters.per_page);
+    }
+
+    function _fetchPage(page, options) {
+        var collection = this;
+
+        if (_.get(options, 'remove') === false) {
+            this._loaded = this._loaded || [this._filters.page];
+            this._loaded.push(page);
+
+            // Sorting just for the sake of simplicity.
+            this._loaded.sort(function(a, b) {
+                return a - b;
+            });
+        }
+
+        this._filters.page = page;
+
+        return Q( collection.fetch(options) ).then(function() {
+            return collection.models;
+        });
+    }
+})();
+Backbone.Collection.prototype.reset = _.wrap(Backbone.Collection.prototype.reset, function(reset, models) {
+    if (!models) {
+        this.ready = false;
+    }
+
+    return reset.apply(this, _.rest(arguments));
+});
+// Backbone.Collection.save
+// ------------------------
+// @param {object} data                     [Collection's attributes to save]
+//
+// Saves collection's attributes to the server.
+Backbone.Collection.prototype.save = function(data) {
+    return Q( $.ajax({
+        type   : 'PUT',
+        url    : _.isFunction(this.url) ? this.url() : this.url,
+        data   : data
+    }) );
+};
+// Backbone.Collection.syncHead
+// ----------------------------
+// @param data      {string}   additional data to pass to the sync. Sometimes needed to obtain specific attributes or links.
+// Syncs collection's links and attributes, without populating models.
+Backbone.Collection.prototype.syncHead = function(data) {
+    var collection = this;
+
+    data = data ? '&' + data : '';
+
+    return Q( Backbone.sync('GET', collection, {data: 'per_page=1' + data}) ).then(function(data) {
+        collection.parse( _.omit(data, '_embedded') );
+        collection.trigger('change', collection);
+        collection.trigger('change:collection:head', collection);
+        return collection;
+    });
+};
+// Wrapper for Backbone.extend
+// ---------------------------
+// This will override Backbone's extend to properly handle and
+// assign mixins.
+var originalExtend = Backbone.Model.extend;
+
+_.each([Backbone.Model, Backbone.Collection, Backbone.Router, Backbone.View, HAL.Model, HAL.Collection], function(klass) {
+    var extendBackboneExtend    =   function(protoProps, classProps) {
+
+            // We call the original extend to have what we'd
+            // normally have...
+            var constructor =   originalExtend.call(this, protoProps, classProps),
+                mixins      =   constructor.prototype.mixins;
+
+            // If we have mixins defined and the constructor
+            // has the mixin method...
+            if (mixins && constructor.prototype.hasOwnProperty('mixins')) {
+                wepow.addMixins(constructor, mixins);
+            }
+
+            // Return constructor.
+            return constructor;
+        };
+
+    klass.extend = extendBackboneExtend;
+});
+HAL.Collection.prototype.toHALJSON  = function(options) {
+    return this.map(function(model) { return model.toHALJSON(options); });
+ };
+HAL.Model.prototype.toCleanHALJSON = function(options) {
+    var json = this.toJSON(options);
+
+    return _.extend(json, {_embedded: this.embedded, _links: this.links});
+};
+HAL.Model.prototype.toHALJSON = function(options) {
+    var json = this.toJSON(options);
+
+    return _.extend(json, {cid: this.cid, embedded: this.embedded, _links: this.links});
+};
+Backbone.Model.prototype.fetch = _.wrap(Backbone.Model.prototype.fetch, function(fetch, options) {
+    options = options || {};
+
+    options.success = options.success || _.noop;
+
+    options.success = _.wrap(options.success, function(success, instance, response, options) {
+        instance.ready = true;
+
+        return success(instance, response, options);
+    });
+
+    return fetch.call(this, options);
+});
+// Wrapper for Backbone.sync
+// -------------------------
+// This will abort the last AJAX request if it's not been completed
+// yet. Will prevent things breaking in slow connections.
+Backbone.sync = _.wrap(Backbone.sync, function(sync, method, model, options) {
+    var lastXHR         =   model._lastXHR && model._lastXHR[method],
+        credentials,
+        remoteURL,
+        remoteUrlParts;
+
+    options = options || {};
+
+    // Aborting last request to avoid races.
+    if ( (lastXHR && lastXHR.readyState !== 4) &&
+         (options && options.safe !== false)) {
+
+        lastXHR.abort('stale');
+    }
+
+    if (!model._lastXHR) {
+        model._lastXHR = {};
+    }
+
+    options.headers = options.headers || {};
+
+    // Adding credentials if needed (Basic Auth)
+    // Note that credentials can be set in one of 3 forms:
+    //
+    // 1. If the model has a credentials attribute.
+    // 2. If the model's URL has credentials embedded, e.g.:
+    //    https://username:password@path
+    // 3. By enabling it using:
+    //    wepow.basicAuth.setCredentials(true, {credentials});
+    if (model.credentials) {
+        credentials = _.result(model, 'credentials');
+    } else if (wepow.settings.basicAuth.on) {
+        credentials = wepow.settings.basicAuth.credentials;
+    } else {
+        remoteURL = options.url || _.result(model, 'url');
+
+        remoteUrlParts = remoteURL.match(/\/\/(.*):(.*)@/);
+
+        if (remoteUrlParts && remoteUrlParts.length === 3) {
+            credentials = {
+                username: remoteUrlParts[1],
+                password: remoteUrlParts[2]
+            };
+        }
+    }
+
+    if (credentials !== undefined) {
+        options.headers.Authorization = wepow.basicAuth.getHeader(credentials);
+    }
+
+    if (!options.xhrFields) {
+        options.xhrFields = {withCredentials: true};
+    }
+
+    model._lastXHR[method] =  sync(method, model, options);
+
+    return model._lastXHR[method];
+});
+// Backbone.View.addState()
+// ------------------------
+// @param {object} options                   [Options to extend the model]
+//
+// Adds a model to view.state whose purpose is storing the view's current
+// state regardless of the view's data. This could be UI behaviours,
+// control states or transition phases.
+//
+// State JSON will be available on your templates under `state` by default.
+//
+// Best used on 'initialize':
+// var View = Backbone.View.extend({
+//    initialize: function() {
+//        this.addState({
+//            defaults: {
+//              title: i18n.t('title'),
+//              color: '#000'
+//            }
+//        });
+//    }
+// });
+//
+Backbone.View.prototype.addState = function(options) {
+    var Model;
+
+    options = _.extend(options, {
+        reset: function() {
+            this.clear({silent: true}).set(this.defaults, {silent: true});
+        }
+    });
+
+    Model = Backbone.Model.extend(options);
+    this.state = new Model();
+};
+// Backbone.View.close()
+// ---------------------
+// This method closes the view. It removes it from the DOM,
+// as well as it's events.
+Backbone.View.prototype.close = function() {
+    var view = this;
+
+    _.each(view.assignees, function(subview) {
+        subview.close();
+        view.assignees = _.without(view.assignees, subview);
+    });
+
+    view.assigned = [];
+
+    view.undelegateEvents();
+
+    if (view.onClose) {
+        view.onClose();
+    }
+
+    view.remove();
+};
+// Backbone.View.disable()
+// -----------------------
+// This method will disable the events of the View. If
+// a view.onDisable() function is present, it will also
+// be called. Useful for adding disable styles.
+Backbone.View.prototype.disable = function() {
+    var view = this;
+
+    _.each(this.assignees, function(subview) {
+        subview.disable();
+    });
+
+    view.stopListening();
+    view.undelegateEvents();
+
+    if (view.onDisable) {
+        view.onDisable();
+    }
+};
+// Backbone.View.enable()
+// ----------------------
+// This method re-enables OR overrides the events tied to
+// this view. If a view.onEnable() function is present, it
+// will also be called. Useful to remove disabled styles.
+Backbone.View.prototype.enable = function(events) {
+    var view = this;
+
+    _.each(this.assignees, function(subview) {
+        subview.enable();
+    });
+
+    view.undelegateEvents();
+    view.stopListening();
+
+    if (events) {
+        view.delegateEvents(events);
+    } else {
+        view.delegateEvents();
+    }
+
+    view.listenToAll();
+
+    if (view.onEnable) {
+        view.onEnable();
+    }
+};
+// Backbone.View.getJSON()
+// -----------------------
+// @param {object} options                  [Additional key/values to add to resulting JSON]
+//
+// Serializes the view model (if there is one) and returns an
+// object. It can also extend with optional additional values.
+Backbone.View.prototype.getJSON = function(options) {
+    var data = this.model || this.collection,
+        json;
+
+    if (data) {
+        json = _.isFunction(data.toHALJSON) ? data.toHALJSON() : data.toJSON();
+    } else {
+        json = {};
+    }
+
+    if (options && _.isPlainObject(options) ) {
+        _.extend(json, options);
+    }
+
+    return json;
+};
+// Backbone.View.listenToAll()
+// ---------------------------
+// Adds listeners to elements in the specific view.
+// DO NOT USE 'bind' or 'on' functions use listenTo.
+Backbone.View.prototype.listenToAll = function() {};
+
+// Backbone.View.assign()
+// ----------------------
+// @param {string} selector             [CSS Selector of target embed]
+// @param {object} view                 [Backbone view object to be embedded]
+//
+// Embeds a subview within a view.
+Backbone.View.prototype.assign = function(selector, view) {
+    var selectors;
+
+    this.assignees = this.assignees || [];
+
+    if ( _.isObject(selector) ) {
+        selectors = selector;
+    } else {
+        selectors = {};
+        selectors[selector] = view;
+    }
+
+    if ( !selectors ) {return;}
+
+    _.each(selectors, function(view, selector) {
+        view.assigned = view.assigned || [];
+
+        view.stopListening();
+        view.listenToAll();
+        view.setElement( this.$(selector) ).render();
+
+        if (view.onShow) {
+            view.onShow();
+        }
+
+        if ( !_.find(this.assignees, view) ) {
+            this.assignees.push(view);
+        }
+
+        if ( !_.find(view.assigne, this) ) {
+            view.assigned.push(this);
+        }
+    }, this);
+};
+// Backbone.View.mute()
+// --------------------
+// Removes views' listeners and events
+Backbone.View.prototype.mute = function() {
+    var view = this;
+
+    _.each(view.assignees, function(subview) {
+        subview.mute();
+    });
+
+    view.undelegateEvents();
+    view.stopListening();
+};
+// Modifying View prototype
+
+// Backbone.View.render()
+// ----------------------
+// @param {object} options                  [Additional key/values to pass to view.getJSON]
+//
+// Default render method.
+Backbone.View.prototype.render = function(options) {
+    var json = this.getJSON(options);
+
+    if (this.state) {
+        json.state = this.state.toJSON();
+    }
+
+    this.$el.html( this.template(json) );
+    this.trigger('render');
+
+    return this;
+};
+// Backbone.View.rerender()
+// ------------------------
+// Re-renders the current view, executing both
+// render() and onShow() functions.
+Backbone.View.prototype.rerender = function(options) {
+    this.render(options);
+
+    if (this.onShow) {
+        this.onShow(options);
+    }
+};
+// Backbone.View.unassign()
+// ------------------------
+// @param {object} view                    [Optional. View to unassign]
+//
+// Unassigns the subview. If no argument is passed, we unassign all events.
+Backbone.View.prototype.unassign = function(view) {
+    var that = this;
+
+    if (!view) {
+
+        _.each(this.assignees, function(subview) {
+            that.assignees = _.without(that.assignees, subview);
+            subview.close();
+        });
+
+    } else if (view && _.contains(this.assignees, view) ) {
+        this.assignees = _.without(this.assignees, view);
+        view.close();
+
+        this.trigger('unassign', view);
+    }
+};
+// Backbone.View.unmute()
+// ----------------------
+// Restarts views' listeners and events
+Backbone.View.prototype.unmute = function() {
+    var view = this;
+
+    _.each(view.assignees, function(subview) {
+        subview.unmute();
+    });
+
+    view.delegateEvents();
+    view.listenToAll();
+};
+// contains
+// --------
+// Check if `value` exists within `list`.
+//
+// Sample usage:
+//     {{contains this.list 'myValue'}}
+Handlebars.registerHelper('contains', function(list, value, options) {
+    if ( _.contains(list, value) ) {
+        return options.fn(this);
+    } else {
+        return options.inverse(this);
+    }
+});
+// for
+// ---
+// Iterates the specified range
+Handlebars.registerHelper('for', function(from, to, block) {
+    var output = '',
+        i;
+
+    for (i = from; i <= to; ++i) {
+        output += block.fn(i);
+    }
+
+    return output;
+});
+// formatDateTime
+// --------------
+// Converts ISO formatted date into a readable one. Accepts an
+// optional "format" value to use with Rails's built ones.
+//
+// Usage:
+// {{formatDateTime this.date_created}}
+// {{formatDateTime this.date_created format='short'}}
+Handlebars.registerHelper('formatDateTime', function(context, options) {
+    var format = options.hash.format || 'time.formats.standard';
+
+    if (context) {
+        return I18n.l(format, context);
+    } else {
+        return context;
+    }
+});
+// formatNumber
+// ------------
+// Localizes a string to a number. This uses the toNumber function of
+// the I18n library, therefore you can pass the following options to
+// this helper:
+//
+// precision: defaults to 3
+// separator: defaults to .
+// delimiter: defaults to ,
+// strip_insignificant_zeros: defaults to false
+//
+// Usage:
+// {{formatNumber '999.999' precision=0}}  outputs: 999
+// {{formatNumber '1238.21' precision=2}}  outputs: 1,238.21
+Handlebars.registerHelper('formatNumber', function(string, options) {
+    return I18n.toNumber(string, options.hash);
+});
+// formatPercentage
+// ----------------
+// Localizes a string to percentage. This uses the toPercentage function of
+// the I18n library, therefore you can pass the following options to
+// this helper:
+//
+// precision: defaults to 3
+// separator: defaults to .
+// delimiter: defaults to ,
+// strip_insignificant_zeros: defaults to false
+//
+// Usage:
+// {{formatPercentage '99.999' precision=0}}  outputs: 99%
+// {{formatPercentage '18.21' precision=2}}  outputs: 18.21%
+Handlebars.registerHelper('formatPercentage', function(string, options) {
+    return I18n.toPercentage(string, options.hash);
+});
+// formatTime
+// ----------
+// Converts an int, assuming it represents seconds, into HH:TT:MM
+// format. If there are no hours, it'll not add them to the string,
+// so 120 will return '02:00'.
+//
+// If there are no minutes, it'll print them as zeros, so 30 will
+// return '00:30'.
+//
+// Usage:
+// {{formatTime this.seconds}}
+Handlebars.registerHelper('formatTime', function(seconds) {
+    var hours   = Math.floor(seconds / 3600),
+        minutes = Math.floor((seconds - (hours * 3600))/60);
+
+    seconds = (seconds - (hours * 3600) - (minutes * 60));
+
+    if (hours > 0 && hours   < 10) {
+        hours = '0' + hours + ':';
+    } else {
+        hours = '';
+    }
+
+    if (minutes < 10) {minutes = '0' + minutes;}
+    if (seconds < 10) {seconds = '0' + seconds;}
+
+    return hours + minutes + ':' + seconds;
+});
+// getItem
+// -------
+// Gets element at index. Can work with both arrays and objects.
+// Additionally, if the output is an array, it converts it to a
+// comma-separated string.
+//
+// Sample usage:
+//     {{getItem @index collection}}
+Handlebars.registerHelper('getItem', function(index, object) {
+    var output;
+
+    if (object) {
+        output = object[index];
+    } else {
+        output = '';
+    }
+
+    if ( _.isArray(output) ) {
+        output = output.join(', ');
+    }
+
+    return output;
+});
+// i18n
+// ----
+// Add translations to templates.
+// Special options list:
+//    truncate=20 will truncate the string if it's bigger than 20
+//    sufix=string will search in @root for 'sufix' key and add its content as sufix
+//    locale='fr' will output the translation in the specified language
+//
+// Sample usage:
+//     {{i18n 'translation.string.here'}}
+Handlebars.registerHelper('i18n', function(string, options) {
+    var result,
+        truncate,
+        defaultValue;
+
+    if (options.hash.truncate) {
+        truncate = options.hash.truncate;
+        delete options.hash.truncate;
+    }
+
+    if (options.hash.sufix) {
+        string+= options.hash.sufix;
+        delete options.hash.sufix;
+    }
+
+    if (options.hash.defaultValue) {
+        defaultValue = I18n.t(options.hash.defaultValue);
+        options.hash.defaultValue = defaultValue;
+    }
+
+    result = I18n.t(string, options.hash);
+
+    if (truncate) {
+        result = Handlebars.helpers.truncate(result, truncate);
+    }
+
+    return result;
+});
+function mapIcons(name) {
+  var icons = {
+    'sms': 'mobile',
+    'cancel': 'close',
+    'destroy': 'delete',
+    'resend': 'send',
+    'send-reminder': 'send',
+    'unshare': 'delete',
+    'opted-out': 'close-1',
+    'completed': 'open',
+    'in-progress': 'started',
+    'started': 'click',
+    'opened': 'eye',
+    'bounced': 'warning',
+    'new': 'circle-o',
+    'sent': 'status-sent',
+    'change-evaluation-status': 'change-status',
+    'share-application': 'share',
+    'share-conference': 'share',
+    'send-sms-reminder': 'mobile',
+    'update-deadline': 'clock',
+    'send-evaluation-notification': 'notification'
+  };
+
+  return icons[name] || name;
+}
+
+Handlebars.registerHelper('icon', function(icon, options) {
+    var color = options.hash.color ? (' wicon-' + options.hash.color) : '',
+        override = options.hash.override,
+        template;
+
+    if(!override) {
+        icon = mapIcons(icon);
+    }
+    template = '<svg class="wicon wicon-' + icon + color + '"><use xlink:href="#wicon-' + icon + '"></use></svg>';
+
+    return new Handlebars.SafeString(template);
+});
+// ifEven
+// ------
+// If block that gets execuded if 'conditional' is even
+Handlebars.registerHelper('ifEven', function(conditional, options) {
+    if (conditional % 2 === 0) {
+        return options.fn(this);
+    } else {
+        return options.inverse(this);
+    }
+});
+// is
+// --
+// Is Helper to compare using JavaScript's operators.
+//
+// Shamelessly taken from:
+// https://github.com/danharper/Handlebars-Helpers
+//
+// Usage:
+// {{#is x '>' y}} ... {{/is}}
+var isArray = function(value) {
+    return Object.prototype.toString.call(value) === '[object Array]';
+};
+
+var ExpressionRegistry = function() {
+    this.expressions = [];
+};
+
+ExpressionRegistry.prototype.add = function (operator, method) {
+    this.expressions[operator] = method;
+};
+
+ExpressionRegistry.prototype.call = function (operator, left, right) {
+    if ( ! this.expressions.hasOwnProperty(operator)) {
+        throw new Error('Unknown operator "'+operator+'"');
+    }
+
+    return this.expressions[operator](left, right);
+};
+
+var eR = new ExpressionRegistry();
+
+eR.add('&&', function(left, right) {
+    return left && right;
+});
+eR.add('||', function(left, right) {
+    return left || right;
+});
+eR.add('not', function(left, right) {
+    return left !== right;
+});
+eR.add('>', function(left, right) {
+    return left > right;
+});
+eR.add('<', function(left, right) {
+    return left < right;
+});
+eR.add('>=', function(left, right) {
+    return left >= right;
+});
+eR.add('<=', function(left, right) {
+    return left <= right;
+});
+eR.add('===', function(left, right) {
+    return left === right;
+});
+eR.add('!==', function(left, right) {
+    return left !== right;
+});
+eR.add('in', function(left, right) {
+    if ( ! isArray(right)) {
+        right = right.split(',');
+    }
+    return right.indexOf(left) !== -1;
+});
+
+var isHelper = function() {
+    var args     = arguments,
+        left     = args[0],
+        operator = args[1],
+        right    = args[2],
+        options  = args[3];
+
+    if (args.length === 2) {
+        options = args[1];
+        if (left) {return options.fn(this);}
+        return options.inverse(this);
+    }
+
+    if (args.length === 3) {
+        right = args[1];
+        options = args[2];
+        if (left === right) {return options.fn(this);}
+        return options.inverse(this);
+    }
+
+    if (eR.call(operator, left, right)) {
+        return options.fn(this);
+    }
+    return options.inverse(this);
+};
+
+Handlebars.registerHelper('is', isHelper);
+// isNull
+// ------
+// Checks if the passed value is null
+Handlebars.registerHelper('isNull', function(value, options) {
+    if ( _.isNull(value) ) {
+        return options.fn(this);
+    } else {
+        return options.inverse(this);
+    }
+});
+// localizeEvaluationStatus
+// ------------------------
+// this is a kind of narrow helper. It will localize the current
+// evaluation status passed. Just pass the evaluation status (string).
+//
+// Sample usage:
+//     {{localizeEvaluationStatus this.evaluation_status}}
+Handlebars.registerHelper('localizeEvaluationStatus', function(status) {
+    return I18n.t('interview_questionnaires.status.' + status);
+});
+// log
+// ---
+// Console logs
+Handlebars.registerHelper('log', function(item) {
+    window.console.log(item);
+});
+// lookupAttribute
+// ---------------
+// Similar to the lookup helper but on this one you can specify a prperty name
+Handlebars.registerHelper('lookupAttribute', function (obj, key, prop) {
+   return obj[key] && obj[key][prop];
+});
+// math
+// ----
+// Lets you use some simple math on your templates. Check the method
+// for the available operators. This only allows for two-number
+// operations at a time.
+//
+// Sample usage:
+//     {{math 1 '+' 5}}
+Handlebars.registerHelper('math', function(first, operator, second) {
+    first  = parseFloat(first);
+    second = parseFloat(second);
+
+    return {
+        '+': first + second,
+        '-': first - second,
+        '*': first * second,
+        '/': first / second,
+        '%': first % second
+    }[operator];
+});
+// parsePlainText
+// --------------
+// Parses plain text to HTML
+//
+// Usage:
+// {{parsePlainText this.string}}
+Handlebars.registerHelper('parsePlainText', function (str) {
+    return new Handlebars.SafeString(str ? str.split('\n').join('<br />') : '');
+});
+// range
+// -----
+// Like #each, but with a defined range
+Handlebars.registerHelper('range', function(from, to, context, options) {
+    var item = '',
+        i,
+        j;
+
+    for (i = from, j = to; i < j; i++) {
+        item = item + options.fn(context[i]);
+    }
+    return item;
+});
+Handlebars.registerHelper('star_rating', function(score, options) {
+    var stars = '',
+        statusClass = _.get(options.hash, 'enabled', true) ? '' : 'disabled';
+
+    for (var i = 0; i < 5; i++) {
+      var icon = score > i ? 'star' : 'star-o';
+      stars += '<span class="star ' + statusClass + '" data-value="' + (i + 1) + '"><svg class="wicon wicon-' + icon + '"><use xlink:href="#wicon-' + icon + '"></use></svg></span>';
+    }
+
+    return new Handlebars.SafeString(stars);
+});
+// selected
+// --------
+// if passed value match an option value it adds the selected attribute.
+// Passed value can be either a primitive, an array or an object.
+// If value is an array or object, a second argument must be passed,
+// specifying the index or key from "value".
+//
+// Usage:
+// {{#selected 'important'}}<select>...</select>{{/selected}}
+// {{#selected ['a','b','c'] @index}}<select>...</select>{{/selected}}
+Handlebars.registerHelper('selected', function(value, index, options) {
+    var $div         = $('<div>'),
+        $otherDiv    = $('<div>'),
+        optionsClone = '',
+        $options,
+        $option;
+
+    // Quick patch to allow for a second argument on the helper (index)
+    // without breaking previous implementations and without adding
+    // ANOTHER helper to the list. It's kinda ugly, but oh well.
+    //
+    // Basically, if options is declared it means an index was passed,
+    // and value is either an object or an array, so we set value to
+    // the actual value we want. Otherwise, an index was not defined
+    // and the argument "index" actually stores the options, so we
+    // set that.
+    if (options) {
+        value = value[index];
+    } else {
+        options = index;
+    }
+
+    $div.html( options.fn(this) );
+
+    $options = $div.find('option');
+
+    _.each( $options, function(option) {
+        $otherDiv.html( $('<option value="' + $(option).attr('value') + '">' + $(option).text() + '</option>') );
+        optionsClone+= $otherDiv.html();
+    });
+
+    $div.find('select').html(optionsClone);
+    $options = $div.find('option');
+    $option  = $div.find('[value="' + value + '"]');
+
+    $option.attr('selected', true);
+
+    return $div.html();
+});
+// truncate
+// --------
+// Truncates a string to specified length.
+//
+// Usage:
+// {{truncate this.string 15}}
+Handlebars.registerHelper('truncate', function (str, len, options) {
+    if (str && str.length > len && str.length > 0) {
+        var new_str = str + ' ';
+
+        new_str = str.substr(0, len);
+
+        if (_.get(options, 'hash.wordBreak', true)) {
+            new_str = str.substr(0, new_str.lastIndexOf(' '));
+        }
+
+        new_str = (new_str.length > 0) ? new_str : str.substr(0, len);
+
+        return new Handlebars.SafeString(new_str + '...');
+    }
+
+    return str;
+});
+_.mixin({
+    generateUID: function(len) {
+        var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+            result     = '',
+            pos;
+
+        _.times(len, function() {
+            pos    = Math.floor(Math.random() * characters.length);
+            result+= characters.substring(pos, pos+1);
+        });
+
+        return result;
+    }
+});
+_.mixin({
+
+    // _.maxObjectPercentages
+    // ----------------------------
+    // @param {object} object             [Object to max]
+    //
+    // For an object with n number of keys, each of which is a numeric value
+    // that represents a rounded number, this method will return an object whose
+    // sum equals 100.
+    maxObjectPercentages: function(object) {
+      var total = _.sum( _.toArray(object) ),
+          toMax = _.invert(object)[ _.max(object) ];
+
+      if (total > 0 && total !== 100) {
+
+        return _.mapValues(object, function(value, key) {
+          if (key === toMax) { return _.round(value + (100 - total), 1); }
+          return value;
+        });
+
+      }
+
+      return object;
+    }
+});
+(function() {
+    'use strict';
+
+    // wepow Tools module
+    // =====================
+    //
+    // Tools used application-wide (Candidate AND recruiter side alike).
+    function Tools() {
+
+        // {function} Region
+        // -----------------
+        //
+        // @param {string} element                  [region's element's CSS selector]
+        //
+        // This is the Region constructor. Is in charge of managing views
+        // regions and show the different anes accordingly. Just call it's
+        // .show(view) method and it'll take care of replacing the region's
+        // contents with the new view.
+        this.Region = function(element, options) {
+            var el     =  element,
+                region =  {},
+                currentView,
+                closeView,
+                openView;
+
+            options = options || {};
+
+            closeView = function(view) {
+                if (view && view.close) {
+                    view.close();
+                    currentView = undefined;
+                }
+            };
+
+            openView = function(view) {
+                view.undelegateEvents();
+                view.delegateEvents();
+                view.stopListening();
+                view.listenToAll();
+                view.render();
+
+                $(el).html(view.el);
+
+                if (view.onShow) {
+                    view.onShow();
+                }
+            };
+
+            region.open = true;
+
+            region.show = function(view) {
+
+                if (view === currentView) {
+                    return;
+                }
+
+                if (options.siblings) {
+                    if (_.isString(options.siblings) && wepow.regions[options.siblings].open) {
+                        wepow.regions[options.siblings].close();
+                    } else if ( _.isArray(options.siblings) ){
+                        _.each(options.siblings, function(sibling) {
+                            if (wepow.regions[sibling].open) {
+                                wepow.regions[sibling].close();
+                            }
+                        });
+                    }
+                }
+
+                closeView(currentView);
+                currentView = view;
+                openView(currentView);
+                region.open = true;
+
+                return region;
+            };
+
+            region.close = function() {
+                closeView(currentView);
+                region.open = false;
+                $(el).html('');
+            };
+
+            region.getCurrentView = function() {
+                return currentView;
+            };
+
+            region.mute = function() {
+                if (currentView) {currentView.mute();}
+                region.muted = true;
+            };
+
+            region.unmute = function() {
+                if (currentView) {currentView.unmute();}
+                region.muted = false;
+            };
+
+            region.el = element;
+
+            return region;
+        };
+
+        // {function} checkSettings
+        // ------------------------
+        // This function works alongside the
+        //
+        // wepow.settings.swf_paths['comSetup.swf']
+        //
+        // SWF. It receives an object with the tests results and launches an event
+        // with either true or false to continue setup.
+        this.checkSettings = function(data) {
+            var json = $.parseJSON(data),
+                category,
+                errors,
+                warnings;
+
+            $.each(json, function(index, value) {
+                category = index;
+                errors = [];
+                warnings = [];
+
+                $.each(value, function(test, results) {
+                    if (results.status === 'FAIL') {
+                        errors.push(results.error);
+                    } else if (results.status === 'WARNING') {
+                        warnings.push(results.error);
+                    }
+                });
+
+                json[category].errorNumber = errors.length + warnings.length;
+
+                if (errors.length > 0) {
+
+                    json[category].status_text = I18n.t('shared.fail');
+                    json[category].errors =  errors;
+
+                } else if (errors.length === 0 && warnings.length > 0) {
+
+                    json[category].status_text = I18n.t('shared.warning');
+                    json[category].warnings =  warnings;
+
+                } else {
+
+                    json[category].status_text = I18n.t('shared.ok');
+
+                }
+            });
+
+            wepow.events.trigger('wepow:preconditionsReport', json);
+        };
+
+        // {function} deparamUrl
+        // ---------------------
+        // Returns the current location's params in Object form.
+        this.deparamUrl = function(url, silent) {
+            var tools = this,
+                params,
+                parsed,
+                tempUrl;
+
+            url = url ? url.split('?')[1] : window.location.search.substring(1);
+
+            if ( !url && !wepow.settings.UrlParams ) {
+
+                return {};
+
+            } else {
+
+                // Clearing unwanted params from url
+                if (!silent && window.history.replaceState) {
+                    tempUrl = window.location.href;
+
+                    _.each(['auth_token'], function(param) {
+                        tempUrl = tools.removeParamFromUrl(tempUrl, param);
+                    });
+
+                    window.history.replaceState('index', '', tempUrl);
+                }
+
+                // Storing params if there are any, returning them if this
+                // already happenned.
+                if (url && !wepow.settings.UrlParams) {
+                    parsed = this.getParamsFromUrl(url);
+                    params = wepow.settings.UrlParams = parsed;
+                } else if (wepow.settings.UrlParams) {
+                    params = wepow.settings.UrlParams;
+                }
+
+                return params;
+            }
+        };
+
+        this.removeParamFromUrl = function(url, parameter) {
+            var urlParts = url.split('?'),
+                prefix,
+                pars,
+                i;
+
+            if (urlParts.length >= 2) {
+
+                prefix = encodeURIComponent(parameter)+'=';
+                pars = urlParts[1].split(/[&;]/g);
+
+                for (i = pars.length; i-- > 0;) {
+                    if (pars[i].lastIndexOf(prefix, 0) !== -1) {
+                        pars.splice(i, 1);
+                    }
+                }
+
+                url = urlParts[0] + (pars.length > 0 ? '?' + pars.join('&') : '');
+            }
+
+            return url;
+        };
+
+        this.getParamsFromUrl = function(url) {
+            if (url) {
+                return JSON.parse('{"' + url.replace(/&/g, '","').replace(/=/g,'":"') + '"}',
+                                  function(key, value) { return key === '' ? value:decodeURIComponent(value); });
+            } else {
+                return {};
+            }
+        };
+
+        // {function} paramUrl
+        // -------------------
+        // Adds the specified parameters to the URL. If a parameter already exists in
+        // the URL it will be updated.
+        this.paramUrl = function(params, url) {
+            var currentParams,
+                newParams,
+                href;
+
+            params        = params || {};
+            url           = url || window.location;
+            url           = url.split('?');
+            currentParams = this.getParamsFromUrl(url[1]);
+            href          = url[0];
+
+            newParams = $.param( _.extend(currentParams, params) );
+
+            return href + '?' + newParams;
+        };
+
+        this.isMediaRecorderCompatible = function() {
+            return window.isMediaRecorderCompatible() && window.MediaRecorder && window.MediaStreamTrack && !_.isUndefined(window.MediaStreamTrack.prototype.getSettings);
+        };
+
+        this.isWebrtcEnabled = function() {
+            return !wepow.settings.isIE_LT10 && isMediaRecorderCompatible();
+        };
+
+        this.isMediaStreamTrackSupported = function() {
+            var mediaStreamTrack = window.MediaStreamTrack,
+                isBrowserSupported = false;
+
+            if (mediaStreamTrack) {
+                isBrowserSupported = 'getConstraints' in mediaStreamTrack.prototype;
+            }
+
+            return isBrowserSupported;
+        };
+
+        this.supportsWebrtc = function() {
+            return this.isMediaRecorderCompatible() && this.isMediaStreamTrackSupported();
+        };
+
+        this.canUseWebrtc = function() {
+            return this.isWebrtcEnabled() && this.supportsWebrtc();
+        };
+
+        this.embedRecorder = function(options) {
+            // Compatible Browsers:
+            // http://iswebrtcreadyyet.com/
+            if (wepow.tools.canUseWebrtc() || options.standalone) {
+                var recordingEvents = {
+                    onFinishRecording: options.onFinishRecording,
+                    onStartRecording: options.onStartRecording
+                };
+
+                return new WepowRecorder({
+                    containerId: options.id,
+                    controls: options.controls,
+                    containerClass: options.containerClass,
+                    width: options.width,
+                    height: options.height,
+                    layout: options.layout,
+                    minTime: options.minTime,
+                    maxTime: options.maxTime,
+                    onFinishRecording: recordingEvents.onFinishRecording,
+                    onStartRecording: recordingEvents.onStartRecording,
+                    onData: options.onData,
+                    onReady: options.onReady,
+                    onTimeupdate: options.onTimeupdate
+                });
+            } else {
+                this.embedSWF(options);
+            }
+        };
+
+        // {function} embedSWF
+        // -------------------
+        //
+        // @param {object} options                  [Options object]
+        //
+        // Embeds the specified SWF to the DOM using SWFObject.
+        this.embedSWF = function(options) {
+            var callback = options.callback;
+
+            // Default options
+            options = _.extend({
+                attributes  :       null,
+                callback    :       function(status) {
+                    var template,
+                        dimensions,
+                        warningSize;
+
+                    if (!status.success) {
+                        template    = templates['layout/no-flash'];
+                        warningSize = 'small';
+                        dimensions  = {
+                            width  : options.width,
+                            height : options.height
+                        };
+
+                        $('#' + options.id).html( template({}) );
+                        $('#' + options.id).find('.no_flash_warning').css(dimensions);
+
+                        if (options.width > 300 && options.width < 600) {
+                           warningSize = 'medium';
+                        } else if (options.width > 600) {
+                           warningSize = 'large';
+                        }
+
+                        $('#' + options.id).find('.no_flash_warning').addClass(warningSize);
+
+                        wepow.events.trigger('noFlash', status);
+                    }
+
+                    if (callback) {
+                        callback.apply(this, status);
+                    }
+                },
+                flashvars   :       {
+                    autoplay            :   true,
+                    language            :   wepow.settings.current_locale
+                },
+                height      :       '137',
+                id          :       'flash_container',
+                params      :       {
+                    allowscriptaccess   :   'always',
+                    quality             :   'high',
+                    wmode               :   'opaque'
+                },
+                swfUrl      :       '/',
+                version     :       wepow.settings.minimum_flash_version,
+                width       :       '310',
+                xiswf       :       wepow.settings.swf_paths['playerProductInstall.swf']
+            }, options);
+
+            yepnope({
+                test: window.swfobject,
+                nope: wepow.settings.js_lib.swfobject,
+                complete: function() {
+
+                    swfobject.embedSWF(
+                        options.swfUrl,
+                        options.id,
+                        options.width,
+                        options.height,
+                        options.version,
+                        options.xiswf,
+                        options.flashvars,
+                        options.params,
+                        options.attributes,
+                        options.callback
+                    );
+
+                    return wepow.events.trigger('wepow:SWFObjectLoaded', options);
+                }
+            });
+        };
+
+        // {function} datetimepicker
+        // -------------------------
+        //
+        // @param {object} $element                 [jQuery object of element to have datetimepicker]
+        // @param {object} options                  [Options to be added]
+        this.datetimepicker = function($element, options) {
+
+            if (_.isString(options) && options === 'close') {
+
+                if ($element && $element.datetimepicker) {
+                    $element.datetimepicker('destroy');
+                }
+
+                return $('#ui-datepicker-div').remove();
+            }
+
+            options = _.extend({
+                closeText           :   I18n.t('actions.select'),
+                currentText         :   I18n.t('time_picker.now'),
+                hourText            :   I18n.t('time_picker.hour'),
+                minuteText          :   I18n.t('time_picker.minutes'),
+                timeText            :   I18n.t('time_picker.time'),
+                monthNames          :   moment.months(),
+                monthNamesShort     :   moment.monthsShort(),
+                dayNamesShort       :   moment.weekdaysShort(),
+                dayNamesMin         :   moment.weekdaysShort(),
+                dayNames            :   moment.weekdays(),
+                amNames             :   [I18n.t('time.am')],
+                pmNames             :   [I18n.t('time.pm')],
+                dateFormat          :   'MM dd, yy',
+                pickerTimeFormat    :   'hh:mm TT',
+                timeFormat          :   'hh:mm TT',
+                separator           :   ' ',
+                showAnim            :   '',
+                showTimezone        :   false,
+                showSecond          :   false,
+                showMillisec        :   false,
+                stepMinute          :   5,
+                pickerType          :   'datetime'
+            }, options);
+
+            yepnope({
+                test: $().datetimepicker,
+                nope: wepow.settings.js_lib.jquery_ui_datetime,
+                complete: function() {
+                    var type = options.pickerType + 'picker';
+
+                    // Overriding the checkOffset function because it sucks.
+                    _.extend($.datepicker, {
+                        _checkOffset: function(inst, offset) {
+                            return offset;
+                        }
+                    });
+
+                    $element[type](options);
+
+                    if (options.startDate) {
+                        $element[type]('setDate', options.startDate);
+                    }
+                }
+            });
+        };
+
+        // {function} cleditor
+        // -------------------
+        //
+        // @param {object} $element                 [jQuery object of the textarea to have a cleditor]
+        // @param {object} options                  [Options to be added]
+        //
+        // Creates a WYSIWYG editon on the textarea selected. CAn be extended with
+        // custom options you may pass as a second argument.
+        this.cleditor = function($element, options) {
+            yepnope({
+                test: $.cleditor,
+                nope: wepow.settings.js_lib.cleditor,
+                callback: function(url, testResult) {
+                    var cancelText  =   I18n.t('actions.cancel'),
+                        okText      =   I18n.t('actions.reset'),
+                        restoreText =   I18n.t('actions.restore_default_text'),
+                        text        =   '<p>' + restoreText + '</p> <button class="cancel">' + cancelText + '</button> <button class="primary_action">' + okText + '</button>';
+
+                    if (!testResult) {
+
+                        // Adding Restore to default button functionality
+                        $.cleditor.buttons.restore = {
+                            name            :   'restore',
+                            stripIndex      :   21,
+                            title           :   I18n.t('actions.restore_default'),
+                            popupName       :   'restore',
+                            popupClass      :   'cleditorPromptWarning',
+                            popupContent    :   text,
+                            buttonClick     :   wepow.tools.restoreDefault
+                        };
+
+                        // Adding Save as default button functionality
+                        $.cleditor.buttons.save = {
+                            name            :   'save',
+                            css             :   {'background-position' : '-601px center'},
+                            title           :   I18n.t('actions.save_default'),
+                            buttonClick     :   wepow.tools.saveAsDefault
+                        };
+
+                    }
+                },
+
+                complete: function() {
+
+                    $element.cleditor(options);
+
+                    if (options.afterInit) {
+                        options.afterInit();
+                    }
+                }
+            });
+
+            this.saveAsDefault = function(event, data) {
+                wepow.events.trigger('cleditor:saveAsDefault', data);
+
+                return false;
+            };
+
+            this.restoreDefault = function(event, data) {
+                $(data.popup).children('.primary_action')
+                             .unbind('click')
+                             .bind('click', function(event) {
+
+                    var editor  = data.editor,
+                        content = editor.$area.data('default');
+
+                    editor.$area.val(content);
+
+                    editor.updateFrame();
+                    editor.hidePopups();
+
+                    event.preventDefault();
+
+                    wepow.events.trigger('cleditor:restoreToDefault', data);
+                });
+
+                $(data.popup).children('.cancel')
+                             .unbind('click')
+                             .bind('click', function(event) {
+
+                    var editor = data.editor;
+
+                    editor.hidePopups();
+
+                    event.preventDefault();
+                });
+            };
+        };
+
+        // {function} phonePicker
+        // ----------------------
+        //
+        // @param {object} $element                 [jQuery object of the input to have the picker]
+        // @param {object} options                  [Options to be added]
+        //
+        // Creates a phone picker for easy international phone input.
+        this.phonePicker = function($element, options) {
+            options = _.extend({
+                autoHideDialCode: true,
+                initialCountry: 'us',
+                nationalMode: false,
+                preferredCountries: ['us', 'mx'],
+                responsiveDropdown: true,
+                placeholderNumberType: 'MOBILE',
+                formatOnDisplay: false,
+                separateDialCode: true
+            }, options);
+
+            yepnope({
+                test: $.fn.intlTelInput,
+                nope: wepow.settings.js_lib.phonePicker,
+                callback: function() {
+                    $.fn.intlTelInput.loadUtils(wepow.settings.js_lib.phonePickerUtils);
+                },
+                complete: function() {
+                    $element.intlTelInput(options);
+
+                    wepow.events.trigger('tools:phonePicker:initiated', {
+                        element : $element,
+                        options : options
+                    });
+                }
+            });
+        };
+
+        // {function} generateUUID
+        // -----------------------
+        // Returns a UUID rfc4122 version 4. Code taken from:
+        // http://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript
+        this.generateUUID = function() {
+            function s4() {
+                return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+            }
+
+            return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
+        },
+
+        // {function} videoStoreComplete
+        // -----------------------------
+        //
+        // @param {object}       data                   [SWF data returned]
+        //
+        // This is a horrible hack to prevent IE from breaking because of dumb
+        // choices made on uglifier. It is long to explain, but as a summary the
+        // following statements collaborated:
+        //
+        //     1. SWF flashvars defined callbacks have no context when they are
+        //        executed.
+        //     2. The 'resourcesAddEdit' component can live in more than one module,
+        //        without any guarantees of it's name (even though we could, maybe
+        //        know which module it's living on).
+        //     3. Uglifier (the asset compressor) replaces all instances of single
+        //        quotes to double quotes, breaking any attempt of using something
+        //        like:
+        //
+        //             function() {events.trigger('myEvent');}
+        //
+        //        as a flashvar parameter.
+        //
+        // The result is that the callback needs to be namespaced (to avoid the
+        // quotes issue), needs to be global accessible (because we do not know
+        // where the component lives) and needs to be context-free. This fixes all
+        // the above, but is a nasty hack. Yay.
+        this.videoStoreComplete = function(data) {
+            wepow.events.trigger('resources:addEdit:recordingFinished', data);
+        };
+
+        this.videoStartRecord = function(data) {
+            wepow.events.trigger('resources:addEdit:recordingStart', data);
+        };
+
+        // {function} validateEmail
+        // ------------------------
+        //
+        // @param {string}       email                   [Email to validate]
+        //
+        // Performs a very simple email validation. Sucks, but oh well..
+        this.validateEmail = function(email) {
+            return /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/.test(email);
+        };
+
+        // {function} encodeVideoSources
+        // -----------------------------
+        //
+        // @param {array}         sources                [Sources to be encoded]
+        //
+        // Encodes video sources URIs and stringify them.
+        this.encodeVideoSources = function(sources) {
+            var newSources = _.cloneDeep(sources);
+
+            _.each(newSources, function(source) {
+                source.href = encodeURIComponent(source.href);
+            });
+
+            return JSON.stringify(newSources);
+        };
+
+        // {function} uploadFile
+        // ---------------------
+        //
+        // @param {input}      node                   [input[type="file"] with file data]
+        // @param {url}        string                 [URL to upload file to]
+        // @param {options}    object                 [Optional parameters]
+        //
+        // Uploads a file.
+        this.uploadFile = function(input, url, options) {
+            var data,
+                xhr;
+
+            options = _.defaults(options, {type: 'POST'});
+
+            // Checking we have the basics
+            if (!input) {
+                throw new Error('File Upload: No input selected!');
+            } else if (!url) {
+                throw new Error('File Upload: No URL to upload to!');
+            }
+
+            // Modern browsers upload
+            if (window.FormData && window.XMLHttpRequest) {
+                data = new FormData();
+                xhr  = new XMLHttpRequest();
+
+                // Building data
+                _.each(options.data, function(value, key) {
+                    data.append(key, value);
+                });
+
+                data.append(options.name || 'file', input);
+
+                // Setting up XHR object
+                xhr.upload.addEventListener('progress', function(event) {
+                    var inProgress = Math.round(event.loaded / event.total * 250);
+
+                    if (inProgress >= 99) {
+                        wepow.events.trigger('fileUpload:disableCancel');
+                    }
+
+                    wepow.events.trigger('fileUpload:progress', {
+                        event: event,
+                        input: input,
+                        xhr: xhr
+                    });
+                }, false);
+
+                xhr.addEventListener('load', function(event) {
+                    wepow.events.trigger('fileUpload:complete', {
+                        event: event,
+                        input: input,
+                        xhr: xhr
+                    });
+                }, false);
+
+                xhr.addEventListener('error', function(event) {
+                    wepow.events.trigger('fileUpload:error', {
+                        event: event,
+                        input: input,
+                        xhr: xhr
+                    });
+                }, false);
+
+                xhr.addEventListener('abort', function(event) {
+                    wepow.events.trigger('fileUpload:abort', {
+                        event: event,
+                        input: input,
+                        xhr: xhr
+                    });
+                }, false);
+
+                wepow.events.trigger('fileUpload:started', { input: input });
+
+                xhr.addEventListener('timeout', function(event) {
+                    wepow.events.trigger('fileUpload:timeoutError', event);
+                }, false);
+
+                xhr.open(options.type, url, true);
+
+                // Setting headers
+                _.each(options.headers, function(value, key) {
+                    xhr.setRequestHeader(key, value);
+                });
+
+                xhr.timeout = options.timeout || 0;
+
+                // Sending data
+                xhr.send(data);
+
+                return xhr;
+
+            // Old Browsers fallback
+            } else {
+                wepow.modeless.set({
+                    title       :   I18n.t('resources.form.upload_video_failed_title'),
+                    content     :   I18n.t('resources.form.upload_video_unsupported'),
+                    dialogClass :   'alert'
+                }).show();
+            }
+        };
+
+        this.uploadFilePromise = function(input, url, options) {
+            var deferred = Q.defer(),
+                xhr = wepow.tools.uploadFile(input, url, options);
+
+            xhr.addEventListener('load', function() {
+                if (xhr.status === 204) {
+                    deferred.resolve(xhr);
+                } else {
+                    deferred.reject( {xhr: xhr} );
+                }
+            }, false);
+
+            xhr.addEventListener('error', function() {
+                deferred.reject( {xhr: xhr} );
+            }, false);
+
+            wepow.events.on('upload:abort', function() {
+                xhr.abort();
+                deferred.reject( {xhr: xhr, clientAborted: true } );
+            });
+
+            return deferred.promise;
+        };
+
+        // {function} getContrast
+        // ----------------------
+        //
+        // @param {hexcolor}   color                  [Color in hexadecimal]
+        //
+        // Gets the contrast color name based on a hexadecimal color number
+        this.getContrast = function(hexcolor) {
+            var r   = parseInt(hexcolor.substr(0,2),16),
+                g   = parseInt(hexcolor.substr(2,2),16),
+                b   = parseInt(hexcolor.substr(4,2),16),
+                yiq = ((r*299)+(g*587)+(b*114))/1000;
+
+            return (yiq >= 128) ? 'black' : 'white';
+        };
+
+        var getPlayerSource = function(source) {
+            source = source || { href: '' };
+
+            var playerSource = {
+                src: source.href
+            };
+
+            if (source.name === 'youtube') {
+                playerSource.type = 'video/youtube';
+            } else if (source.href.match(/^http/)) {
+                playerSource.type = 'application/x-mpegURL';
+                playerSource.withCredentials = false;
+                playerSource.timeout = 5000;
+            } else if (source.type === 'video/mpeg4') {
+                playerSource.type = 'rtmp/mp4';
+            } else if (source.type === 'video/flv') {
+                playerSource.type = 'rtmp/flv';
+            }
+
+            return playerSource;
+        };
+
+        var onPlayerReady = function(player, options, elementId) {
+            var $container = $('#' + elementId);
+
+            if (player.options_.techOrder[0] === 'flash' && !videojs.getTech('Flash').isSupported()) {
+                return wepow.tools.showFlashErrors(player);
+            }
+
+            // Pause and remove player instance if DOM element no longer exists
+            player.on('timeupdate', function() {
+                if (!this.el_) {
+                    player.pause();
+                    player.dispose();
+                    return;
+                }
+            });
+
+            player.on('error', function() {
+                var errorType = player.error().message || player.error().code,
+                    emailContent,
+                    emailBody;
+
+                emailBody = encodeURIComponent('Interview Url: ' + location.href + '\n');
+                emailBody += encodeURIComponent('Video Url: ' + options.source.src + '\n');
+                emailBody += encodeURIComponent('Error Message: ' + errorType);
+
+                emailContent = '?subject=' + encodeURIComponent('Video Error');
+                emailContent += '&body=' + emailBody;
+
+                this.errorDisplay.contentEl().innerHTML = I18n.t('shared.player.failed', {
+                    support_link: 'mailto:' + wepow.settings.emails.support + emailContent
+                });
+
+                if (errorType.match(/network/gi)) {
+                    $(this.errorDisplay.contentEl()).find('small').hide();
+                }
+
+                _.delay(function() {
+                    $container.removeClass('vjs-waiting');
+                }, 0);
+            });
+
+            player.currentTimeInSeconds = function() {
+                return parseInt(this.currentTime());
+            };
+
+            player.durationInSeconds = function() {
+                return parseInt(this.duration());
+            };
+
+            if (options.autoplay && player.paused()) {
+                $container.find('.vjs-big-play-button').show();
+            }
+        };
+
+        this.createAutoplayButton = function(player) {
+            var buttonComponent = videojs.getComponent('Button'),
+                autoPlay;
+
+            autoPlay = videojs.extend(buttonComponent, {
+                constructor: function() {
+                    buttonComponent.apply(this, arguments);
+                    player.$autoplayButton = $('<svg class="wicon wicon-sync"><use xlink:href="#wicon-sync"></use></svg>');
+                    $(this.el_).html(player.$autoplayButton);
+                },
+                handleClick: function() {
+                    player.trigger('autoplayToggle');
+                }
+            });
+
+            videojs.registerComponent('AutoPlay', autoPlay);
+            player.getChild('controlBar').addChild('autoPlay', {});
+        };
+
+        // {function} createHTML5Player
+        // ----------------------------
+        this.createHTML5Player = function(options) {
+            var $video = $(document.createElement('video')),
+                elementId = _.uniqueId('video_'),
+                deferred = Q.defer(),
+                that = this,
+                playerOptions,
+                techOrder = ['html5', 'flash'],
+                availableHLSSources;
+
+            _.defaults(options, {
+                loadingSpinner: true,
+                controls: true
+            });
+
+            if (options.source && options.source.name === 'youtube') {
+                techOrder = ['youtube'];
+
+                // Renamed the "list" param to exclude the playlist functionality from the videojs-youtube plugin
+                options.source.href = options.source.href.replace('list=', 'listX=');
+            }
+
+            videojs.options.flash.swf = wepow.settings.swf_paths['video-js.swf'];
+
+            window.VIDEOJS_NO_DYNAMIC_STYLE = true;
+
+            playerOptions = {
+                width: options.width,
+                height: options.height,
+                controls: options.controls,
+                autoplay: options.autoplay,
+                sources: [getPlayerSource(options.source)],
+                controlBar: {
+                    volumePanel: {
+                        inline: false,
+                        vertical: true
+                    },
+                    children: [
+                        'playToggle',
+                        'progressControl',
+                        'remainingTimeDisplay',
+                        'volumePanel',
+                        'MyCustomComponent'
+                    ]
+                }
+            };
+
+            yepnope({
+                test: videojs.options.hls,
+                nope: [wepow.settings.js_lib.videojs_hls],
+                complete : function() {
+                    var $videoContainer = $('#' + options.id);
+
+                    $video.attr('id', elementId)
+                        .css({ width: options.width, height: options.height })
+                        .addClass('video-js vjs-big-play-centered vjs-default-skin thumbnail')
+                        .on('contextmenu', function(event) {
+                            event.preventDefault();
+                        });
+
+                    $videoContainer
+                        .css({ width: options.width, height: options.height })
+                        .addClass('video-js-container')
+                        .append($video);
+
+                    availableHLSSources = that.getHLSSources(options.playback_sources);
+
+                    if ((wepow.models.get('browser').get('isEdge') || availableHLSSources.length == 0) && _.get(options, 'source.name') !== 'youtube') {
+                        if (wepow.models.get('browser').get('isEdge')) {
+                            videojs.options.hls.overrideNative = true;
+                        }
+
+                        techOrder = ['flash'];
+                    } else {
+                        playerOptions.html5 = {
+                            featuresProgressEvents: true,
+                            featuresTimeupdateEvents: true
+                        };
+                    }
+
+                    playerOptions.techOrder = techOrder;
+
+                    $video.player = videojs(elementId, playerOptions, function() {
+                        deferred.resolve($video.player);
+                        onPlayerReady(this, options, elementId);
+                    });
+
+                    if (options.autoplayButton) {
+                        that.createAutoplayButton($video.player);
+                    }
+
+                    // Actually, videojs doesn't support 'getTech('Flash')' function for Firefox browser.
+                    // Then we manually need to check if the swf is ready or not.
+                    if (videojs.browser.IS_FIREFOX) {
+                        setTimeout(function () {
+                            if ($video && $video.player && !$video.player.isReady_) {
+                                that.showFlashErrors($video.player);
+                            }
+                        }, 5000);
+                    }
+                }
+            });
+
+            return deferred.promise;
+        };
+
+        this.showFlashErrors = function(player) {
+            player.errorDisplay.show();
+            $(player.el()).find('.vjs-modal-dialog-content').html(I18n.t('setup_test.no_flash'));
+            $(player.el()).removeClass('vjs-waiting').addClass('vjs-error');
+
+            wepow.events.trigger('wepow:videojs:noFlashDetected');
+        };
+
+        this.getClosestResolution = function(width, sources) {
+            var currentSource = sources[0],
+                diff;
+
+            width = width || 640;
+            diff = Math.abs(width - currentSource.width);
+
+            _.each(sources, function(source) {
+                var newDiff = Math.abs(width - source.width);
+
+                if (newDiff < diff) {
+                    diff = newDiff;
+                    currentSource = source;
+                }
+            });
+
+            return currentSource;
+        };
+
+        this.getHLSSources = function(availableSources) {
+            var hlsSources = [];
+
+            // Prefer hls_playlist
+            hlsSources = _.filter(availableSources, function(source) {
+                return source.name === 'hls_playlist';
+            });
+
+            if (!hlsSources.length) {
+                hlsSources = _.filter(availableSources, function(source) {
+                    return source.name === 'hls';
+                });
+            }
+
+            return hlsSources;
+        };
+
+        this.getHigherBitrate = function(sources, source) {
+            var filteredSources = _.filter(sources, function(item) {
+                return item.name === source.name && item.width === source.width;
+            });
+
+            return _.reduce(filteredSources, function(prev, current) {
+                return (prev.video_bitrate > current.video_bitrate) ? prev : current;
+            });
+        };
+
+        this.getVideoSource = function(sources, playerOptions) {
+            var flashSourceTypes = ['stream', 'rtmp', 'source_rtmp'],
+                availableSources = [],
+                href,
+                source,
+                youtubeVideo;
+
+            sources = sources || [];
+            playerOptions = playerOptions || {};
+
+            youtubeVideo = _.find(sources, { name: 'youtube' });
+
+            if (youtubeVideo) {
+                return youtubeVideo;
+            }
+
+            availableSources = this.getHLSSources(sources);
+
+            // If there's no compatible source, look for rtmp sources
+            if (!availableSources.length) {
+                availableSources = _.filter(sources, function(source) {
+                    return _.contains(flashSourceTypes, source.name) && _.has(source, 'resolution');
+                });
+
+                // If we already have multiple rtmp sources, exclude the original source
+                if (availableSources.length > 1) {
+                    availableSources = _.filter(availableSources, function(source) {
+                        return source.name !== 'source_rtmp';
+                    });
+                } else if (_.isEmpty(availableSources)) {
+                    availableSources = _.filter(sources, {name: 'source_rtmp'});
+                }
+            }
+
+            if (availableSources.length) {
+                source = this.getClosestResolution(playerOptions.width, availableSources);
+                source = this.getHigherBitrate(availableSources, source);
+            }
+
+            // Add 'mp4:' prefix to rtmp videos
+            if (source && source.href.match(/^rtmp/) && source.type === 'video/mpeg4') {
+                href = source.href;
+
+                if (!href.match(/mp4:/)) {
+                    source.href = href.substr(0, href.lastIndexOf('/') + 1) + 'mp4:' + href.substr(href.lastIndexOf('/') + 1);
+                }
+            }
+
+            return source;
+        };
+
+        // {function} embedVideo
+        // ---------------------
+        //
+        // @param {string} streamURL [Video file or stream url]
+        // @param {object} options [Player options]
+        //
+        // Initializes a video player
+        this.embedVideo = function(options) {
+            var that = this,
+                deferred = Q.defer();
+
+            _.defaultsDeep(options, {
+                swfUrl: wepow.settings.swf_paths['jwplayer.swf'],
+                controls: true,
+                height: 240,
+                width: 320,
+                recorder: false,
+                autoplay: true
+            });
+
+            // Recorder
+            if (options.recorder) {
+                return this.embedRecorder(options);
+            }
+
+            if (!options.playback_sources) {
+                return deferred.reject();
+            }
+
+            options.source = this.getVideoSource(options.playback_sources, options);
+            options.$el = $('#' + options.id);
+            return that.createHTML5Player(options);
+        };
+
+        // {function} googleJSAPI
+        // ----------------------
+        //
+        // Loads the Google JS API.
+        this.googleJSAPI = function() {
+            var deferred = Q.defer();
+
+            wepow.events.trigger('ajaxStart');
+
+            yepnope({
+                test     : typeof google !== 'undefined',
+                nope     : wepow.settings.js_lib.googleJsApi,
+                complete : function() {
+                    wepow.events.trigger('ajaxEnd');
+
+                    if (window.google) {
+                        google.load('visualization', '1', {
+                            packages: ['corechart'],
+                            callback: deferred.resolve
+                        });
+                    } else {
+                        deferred.reject();
+                    }
+                }
+            });
+
+            return deferred.promise;
+        };
+
+        // {function} fullcalendar
+        // -----------------------
+        // Loads Full Calendar JQuery plugin
+        //
+        // Something important to understand when start working with full calendar
+        // is that when using time zones it handles the calendar dates as
+        // ambiguously-zoned Moments dates, this means that it saves the correct date
+        // and time but the offset will be saved as GMT 0, which is not exactly UTC.
+        // Example if you add a calendar event for Friday 21 2016 ad 11 am, it will be
+        // saved as an ambiguously-zoned date like this:
+        //
+        // Fri Oct 21 2016 11:00:00 GMT+0000
+        //
+        // So this means if you want to format and show the date to the local user time
+        // you will need to do `moment(date).local().format()`. And also when
+        // manipulating this date you might need to convert it to a different time zone
+        // just rememver to bring it back to the ambiguously-zoned format if you want
+        // to update it, you can use `moment().stripZone` in order to do so. For furhter
+        // documentation about ambiguously-zoned dates refer to the full calendar
+        // documentation: https://fullcalendar.io/docs/utilities/Moment/
+        this.fullCalendar = function($element, options) {
+            var defaultOptions = {
+                    dayClick: function(date, event, view) {
+                        wepow.events.trigger('fullcalendar:day:click', date, event, view);
+                    },
+                    eventClick: function(calendarEvent, event, view) {
+                        wepow.events.trigger('fullcalendar:event:click', calendarEvent, event, view);
+                    },
+                    eventDrop: function(calendarEvent, delta, revertFunction, event, ui, view) {
+                        wepow.events.trigger('fullcalendar:event:drop', calendarEvent, delta, revertFunction, event, ui, view);
+                    },
+                    eventResize: function(calendarEvent, delta, revertFunction) {
+                        wepow.events.trigger('fullcalendar:event:resize', calendarEvent, delta, revertFunction);
+                    },
+                    events: function(start, end, timezone, callback) {
+                        wepow.events.trigger('fullcalendar:events', start, end, timezone, callback);
+                    }
+                },
+                deferred = Q.defer(),
+                functionArguments = arguments;
+
+            yepnope({
+                test: $.fullCalendar,
+                nope: [wepow.settings.js_lib.fullcalendar, wepow.settings.js_lib.fullcalendarLocales],
+                complete: function() {
+                    if ($.fullCalendar) {
+                        if ( _.isObject(options) ) {
+                            deferred.resolve($element.fullCalendar( _.extend(defaultOptions, options) ));
+                        } else {
+                            deferred.resolve($element.fullCalendar.apply($element, _.drop(functionArguments, 1)));
+                        }
+                    } else {
+                        deferred.reject();
+                    }
+                }
+            });
+
+            return deferred.promise;
+        };
+
+        // {function} textEditor
+        // ---------------------
+        //
+        // Loads Quill text editor
+        // https://quilljs.com/
+        this.textEditor = function(elementId, options) {
+            var deferred = Q.defer();
+
+            yepnope({
+                test: window.Quill,
+                nope: wepow.settings.js_lib.quilljs,
+                complete: function() {
+                    if (window.Quill) {
+                        var Link = window.Quill['import']('formats/link'),
+                            $editor = new window.Quill(document.getElementById(elementId), {
+                                theme: 'snow',
+                                modules: options.modules
+                            });
+
+                        Link.sanitize = function(url) {
+                            var regexp = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/;
+
+                            // If the url is not valid, prepend http protocol
+                            if (!regexp.test(url)) {
+                                url = 'http://' + url;
+                            }
+
+                            return url;
+                        };
+
+                        if (_.isArray(options.customElements)) {
+                            _.each(options.customElements, function(element) {
+                                $('.ql-toolbar').append(element);
+                            });
+                        }
+
+                        $editor.getHTML = function() {
+                            return $editor.root.innerHTML;
+                        };
+
+                        deferred.resolve($editor);
+                    } else {
+                        deferred.reject();
+                    }
+                }
+            });
+
+            return deferred.promise;
+        };
+
+        // {function} timePicker
+        // ---------------------
+        //
+        // Loads timePicker Jquery plugin
+        this.timePicker = function($element, options) {
+            var deferred = Q.defer(),
+                defaultOptions = {
+                    timeFormat: 'hh:mm p',
+                    dynamic: false,
+                    dropdown: true,
+                    scrollbar: true
+                };
+
+            yepnope({
+                test: $.TimePicker,
+                nope: wepow.settings.js_lib.timepicker,
+                complete: function() {
+                    if ($.TimePicker) {
+                        $element.timepicker(_.extend(defaultOptions, options));
+                        deferred.resolve();
+                    } else {
+                        deferred.reject();
+                    }
+                }
+            });
+
+            return deferred.promise;
+        };
+
+        // {function} checkDevicesAccessPermissions
+        // ----------------------------------------
+        // This function prompts the user for access to use the media devices
+        // such as a camera or microphone.
+        //
+        // Return true if current browser is webkit based.
+        //
+        // It is implemented for webkit browsers only because of their extremely
+        // poor design decision of making the permissions prompt as invisible as possible,
+        // causing a lot of support tickets.
+        this.checkDevicesAccessPermissions = function() {
+            var isWebkit = !_.isUndefined(window.navigator.webkitGetUserMedia);
+
+            if (isWebkit) {
+
+                window.navigator.webkitGetUserMedia(
+                    { video: true, audio: true },
+                    function(mediaStream) {
+                        _.each(mediaStream.getAudioTracks(), function(track) { track.stop(); });
+                        _.each(mediaStream.getVideoTracks(), function(track) { track.stop(); });
+
+                        wepow.events.trigger('wepow:settings:devicesAccessAllowed');
+                    },
+                    function(error) {
+                        wepow.events.trigger('wepow:settings:devicesAccessDenied', error);
+                    }
+                );
+            }
+
+            return isWebkit;
+        };
+
+        this.getCurrentDomain = function() {
+            var host = window.location.host,
+                domain = host,
+                components = host.split('.');
+
+            if (components.length > 2) {
+                domain = components.pop();
+                domain = components.pop() + '.' + domain;
+            }
+
+            return domain;
+        };
+
+        this.getUrlHost = function(name) {
+            return name.replace('s.' + this.getCurrentDomain(), location.host);
+        };
+
+        this.getMobilePlatform = function() {
+            var version,
+                os = 'unsupported';
+
+            if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+                os = 'ios';
+            } else if (navigator.userAgent.match(/Android/i)) {
+                os = 'android';
+            }
+
+            version = parseFloat(('' + (/CPU.*OS ([0-9_]{1,5})|(CPU like).*AppleWebKit.*Mobile/i.exec(navigator.userAgent) || [0,''])[1]).replace('undefined', '3_2').replace('_', '.').replace('_', '')) || false;
+
+            return {os: os, version: version};
+        };
+
+        // {function} getUTCDate
+        // ---------------------
+        //
+        // Creating UTC Date.
+        this.getUTCDate = function(date) {
+           return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(),  date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds());
+        };
+
+        this.getLocaleID = function(locale) {
+            var localeID = '';
+
+                if (locale === 'en') {
+                    localeID = 'en-US';
+                } else if (locale === 'es') {
+                    localeID = 'es-419';
+                } else {
+                    localeID = locale;
+                }
+
+            return localeID;
+        };
+
+        // README BEFORE MODIFYING!!!!
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        // NOTE: Renata pinky-promised that if this is ever needed for another
+        //       country we'd NOT do it here. We'd find a UI solution instead.
+        //       She pinky promised!
+        this.addPrefixToMexicanNumbers = function($input) {
+        // END README BEFORE MODIFYING!!!!
+        // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            var fullPhoneNumber = $input.val();
+
+            if ($input.intlTelInput('getSelectedCountryData').dialCode == '52' &&
+                $input.intlTelInput('getNumberType') == 0) {
+                if (fullPhoneNumber.substring(0,0) != '1') {
+                    $input.val('1'+ fullPhoneNumber.substring(0, fullPhoneNumber.length));
+                }
+            }
+        };
+
+        this.selectAllText = function(event) {
+            var $element = $(event.target);
+            $element.select();
+            $element.mouseup(function() {
+                // Prevent further mouseup intervention
+                $element.unbind('mouseup');
+                return false;
+            });
+        };
+
+        // {function} tooltip
+        // -------------------
+        // Open:
+        // @param {string} name [Tooltip name. Tooltip view must exist]
+        // @param {object} options [Options object]
+        //    @options {string/object} position [jQuery UI position object (http://api.jqueryui.com/position/#position-options)]
+        //    @options {object} $highlight [jQuery object of element to highlight alongside tooltip. Defaults to $element]
+        //
+        this.tooltip = {
+            open: function(name, options) {
+                var tooltipView = wepow.views.get('layout.tooltip'),
+                    view = wepow.views.get('tooltip.' + name),
+                    orientation;
+
+                options = this.options = _.extend({
+                    position: {
+                        my: 'left top',
+                        at: 'right+40 top-20'
+                    }
+                }, options);
+
+                if ($('.wtooltip').length) {
+                    return;
+                }
+
+                orientation = options.position.my.search('left') !== -1 ? 'right' : 'left';
+
+                tooltipView.state.set('position', orientation);
+
+                tooltipView.undelegateEvents();
+                tooltipView.delegateEvents();
+                tooltipView.stopListening();
+                tooltipView.listenToAll();
+                tooltipView.render();
+
+                $('body').append(tooltipView.el);
+
+                wepow.tools.overlay.open(options.$highlight);
+
+                tooltipView.$el.find('.wtooltip').position(options.position);
+
+                tooltipView.assign({
+                    '#wtooltip_content': view
+                });
+
+                this.isOpen = true;
+
+                _.delay(function() {
+                    $(document).on('click.tooltipCheck', wepow.tools.tooltip.checkClose);
+                }, 1);
+            },
+
+            checkClose: function(event) {
+                var $element = $(event.target),
+                    clickOnParent = false;
+
+                if (wepow.tools.tooltip.options.$highlight) {
+                    clickOnParent = $.contains(wepow.tools.tooltip.options.$highlight.get(0), $element.get(0));
+                }
+
+                if ($element.is('.woverlay') || clickOnParent) {
+                    wepow.tools.tooltip.close();
+                }
+            },
+
+            close: function() {
+                this.isOpen = false;
+                $(document).off('click.tooltipCheck');
+                wepow.tools.overlay.close();
+                wepow.views.get('layout.tooltip').close();
+            },
+
+            showErrors: function(errors) {
+                wepow.views.get('layout.tooltip').renderErrors(errors);
+            }
+        };
+
+        // {function} overlay
+        // -------------------
+        // Open:
+        // @param {object} $highlight [(optional) jQuery object of element to highlight]
+        //
+        this.overlay = {
+            open: function($highlight) {
+                var $overlay = $('<div class="woverlay"></div>'),
+                    position;
+
+                $('body').append($overlay);
+                $overlay.hide().fadeIn();
+
+                if ($highlight) {
+                    this.originalPosition = $highlight.css('position');
+                    this.originalZindex = $highlight.css('zIndex');
+                    this.$highlight = $highlight;
+
+                    position = this.originalPosition === 'static' ? 'relative' : this.originalPosition;
+
+                    $highlight.css({
+                        'position': position,
+                        'zIndex': 10000
+                    });
+                }
+            },
+
+            close: function() {
+                var $overlay = $('.woverlay'),
+                    that = this;
+
+                that.$highlight.css({
+                    'position': that.originalPosition,
+                    'zIndex': that.originalZindex
+                });
+
+                $overlay.remove();
+            }
+        };
+
+        this.parseHTML = function(string) {
+            var bold = /\*(\S(.*?\S)?)\*/gm,
+                result = string;
+
+            // Add line-breaks
+            result = result.split('\n').join('<br />');
+
+            // Add boldness
+            result = result.replace(bold, '<strong>$1</strong>');
+            return result;
+        };
+    }
+
+    wepow.tools = new Tools();
+})();
+Models.Api = HAL.Model.extend({
+    url: wepow.settings.url.interviewingAPI
+});
+Models.Application = HAL.Model.extend({
+    url: wepow.settings.url.interviewingAPI,
+
+    validate: function(attributes) {
+        var errors = [];
+
+        if ( attributes.candidate.terms === false ) {
+            errors.push('terms');
+        }
+
+        return errors.length > 0 ? errors : undefined;
+    },
+
+    getGeolocation: function() {
+      return Q (
+        $.ajax({
+          type: 'GET',
+          url: this.links['wepow:support:geolocate'].href,
+          timeout: 3000
+        })
+      );
+    }
+});
+Models.User = HAL.Model.extend({
+    validate: function(attributes) {
+        if (attributes.candidate.email.length > 0 &&
+            attributes.candidate.email !== attributes.stub.email_confirmation) {
+            return I18n.t('activemodel.errors.models.user.attributes.confirmation_email.dont_match');
+        }
+
+        if (attributes.candidate.terms === false) {
+            return I18n.t('activemodel.errors.models.user.attributes.base.accept_terms_to_continue');
+        }
+    },
+
+    getMobileURI: function() {
+        var uri = 'candidate://';
+
+        uri += wepow.tools.getCurrentDomain();
+        uri += '/' + (wepow.settings.interview_code || this.get('code'));
+
+        return uri;
+    }
+});
+Models.Organization = HAL.Model.extend({
+    url: function() {
+        return wepow.api.links['wepow:organization'].href;
+    },
+
+    disconnectCronofyEnterprise: function() {
+        var model = this;
+
+        return Q (
+            $.ajax({
+                type: 'DELETE',
+                url: this.links['wepow:organization:enterprise-calendar-disconnect'].href
+            }).then(function(data) {
+                model.set( model.parse(data) ).trigger('sync');
+            })
+        );
+    }
+});
+Models.TimeZone = HAL.Model.extend({});
+Models.UserFeedback = HAL.Model.extend({
+    url: function() {
+        return wepow.user.links['wepow:user:feedback'].href;
+    },
+
+    dismiss: function() {
+        var that = this;
+
+        return Q ( $.ajax({
+            type: 'POST',
+            url: this.links['wepow:user:feedback:dismiss'].href
+        }) ).then(function() {
+            return that.fetch();
+        });
+    }
+});
+Models.UserOmniauthIdentity = HAL.Model.extend({});
+Models.UserReviewer = HAL.Model.extend({});
+Models.UserBase = HAL.Model.extend({
+    toHALJSON: function(options) {
+        var json = this.toJSON(options);
+
+        json.canChangeRole = json.role !== 'owner' && json.email !== wepow.user.get('email');
+        json.roleName = I18n.t('preferences.users.roles.' + json.role);
+        json.value = json.email;
+        json.label = json.first_name && json.last_name ?
+                     '"' + json.first_name + ' ' + json.last_name +
+                     '" <' + json.email + '>' : json.email;
+
+        return _.extend(json, {cid: this.cid, embedded: this.embedded, _links: this.links});
+    },
+
+    parse: function(data, options) {
+        if (_.get(options, 'preventParse')) {
+            return;
+        }
+
+        return HAL.Model.prototype.parse.apply(this, arguments);
+    },
+
+    updateRole: function(role) {
+        var model = this;
+
+        Q( $.ajax({
+            method  : 'POST',
+            url     : model.links['wepow:organization:make-' + role].href
+        }) ).then(function() {
+            wepow.modeless.set({
+                content    : I18n.t('shared.changes_saved'),
+                dialogClass: 'success'
+            }).show();
+        }).done();
+    },
+
+    fetchGoogleCalendarEvents: function(options) {
+        var eventsLink = this.links['wepow:calendar:events'],
+            events = _.find(eventsLink, { name: 'google_oauth2' });
+
+        return Q( $.ajax({
+            type: 'GET',
+            url: events.href,
+            data: options,
+            global: false,
+            timeout: undefined
+        }) );
+    },
+
+    unsyncGoogleCalendar: function() {
+        var calendarUnsync = _.find(this.links['wepow:calendar:events'], { name: 'google_oauth2' });
+
+        return Q( $.ajax({
+            type: 'DELETE',
+            url: calendarUnsync.href
+        }) );
+    },
+
+    completeTour: function() {
+        var rel = this.links['wepow:user:home-tour'];
+
+        if (!rel) {
+            return Q.reject();
+        }
+
+        return Q( this.save({}, {
+            type: 'POST',
+            url: rel.href
+        }) );
+    },
+
+    stalk: function(data) {
+        var rel = this.links['wepow:user:track'];
+
+        if (!rel) {
+            return Q.reject();
+        }
+
+        return Q( this.save({}, {
+            type: 'POST',
+            url: rel.href,
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            preventParse: true
+        }) );
+    }
+});
+Models.EmailConfiguration = HAL.Model.extend({
+    parse: function(resp, options) {
+        var parse = _.bind(HAL.Model.prototype.parse, this);
+
+        options = options || {};
+        options = _.defaults(options, { parse: true });
+
+        return options.parse ? parse(resp, options) : {};
+    }
+});
+Models.Settings = HAL.Model.extend({
+    defaults: {
+        color: '00a3e3'
+    }
+});
+Models.Team = HAL.Model.extend({
+    toHALJSON: function(options) {
+        var json = this.toJSON(options);
+
+         json.canEditName = _.get(this, 'links.wepow:team:edit-name', []);
+         json.canDestroy = _.contains(_.get(this, 'links.self.allow', []), 'DELETE');
+
+        if (json.data_retention_settings) {
+            json.data_retention_settings.formattedDuration = moment.duration(json.data_retention_settings.duration, 'seconds').asDays();
+        }
+
+        return _.extend(json, {cid: this.cid, embedded: this.embedded, _links: this.links});
+    },
+
+    saveTags: function(data) {
+        var canEdit = _.contains(this.embedded['wepow:team:tags']._links.self.allow, 'PUT'),
+            type = _.chain(data).keys().first().value(),
+            that = this,
+            url, method;
+
+        if (canEdit) {
+            url = this.embedded['wepow:team:tags']._links.self.href;
+            method = 'PUT';
+        } else {
+            url = _.get(this.embedded, 'wepow:team:tags._links.wepow:team:tags:addition.href');
+            method = 'POST';
+
+            data[type] = _.difference(data[type], this.embedded['wepow:team:tags'][type]);
+        }
+
+        data[type] = _.compact(data[type]);
+
+        return Q( $.ajax({
+            contentType: 'application/json',
+            url: url,
+            method: method,
+            data: JSON.stringify(data)
+        }) ).then(function() {
+            that.fetch();
+        });
+    }
+});
+
+
+
+
+
+var Models = window.Models;
+
+wepow.models = {
+    get: function(string) {
+        var splitted = string.split('.'),
+            constructorName,
+            model;
+
+        wepow.models[splitted[0]] = wepow.models[splitted[0]] || {};
+
+        model = wepow.models[splitted[0]][splitted[1]];
+
+        if ( _.isEmpty(model) ) {
+            constructorName = _.chain(string).camelCase().capitalize().value();
+
+            if (Models[constructorName]) {
+                model = wepow.models[splitted[0]][splitted[1]] = new Models[constructorName]();
+            } else {
+                if (window.console && window.console.warn) {
+                    window.console.warn('No model "' + constructorName + '" found.');
+                }
+                return;
+            }
+
+        }
+
+        return model;
+    },
+
+    set: function(string, data, options) {
+        var splitted = string.split('.'),
+            constructorName,
+            model;
+
+        wepow.models[splitted[0]] = wepow.models[splitted[0]] || {};
+
+        model = wepow.models[splitted[0]][splitted[1]];
+
+        if (_.isEmpty(data)) {
+            return window.console.error('No data passed. Use wepow.models.get if you want to get the current instance of ' + string);
+        }
+
+        if (data instanceof Backbone.Model) {
+            wepow.models[splitted[0]][splitted[1]] = model = data;
+        } else if (_.isEmpty(model)) {
+            constructorName = _.chain(string).camelCase().capitalize().value();
+
+            if (Models[constructorName]) {
+                model = wepow.models[splitted[0]][splitted[1]] = new Models[constructorName](data);
+            } else {
+                if (window.console && window.console.warn) {
+                    window.console.warn('No model "' + constructorName + '" found.');
+                }
+                return;
+            }
+        } else {
+            model.set(data, options);
+        }
+
+        return model;
+    }
+};
+Views.Download = Backbone.View.extend({
+    template: templates['candidate_mobile/download'],
+
+    events: {
+        'submit form': 'redirectToNativeApp'
+    },
+
+    getJSON: function() {
+        var json = wepow.models.get('user').toJSON();
+
+        json.mobilePlatform = wepow.tools.getMobilePlatform();
+        json.application = wepow.models.get('application').toHALJSON();
+        json.language = I18n.currentLocale();
+        json.privacy_policy = wepow.settings.external.privacy_policy[json.language] || wepow.settings.external.privacy_policy.en;
+        json.terms_of_service = wepow.settings.external.terms_and_conditions[json.language] || wepow.settings.external.terms_and_conditions.en;
+        json.ios_app_store = wepow.settings.external.mobile_app_links.ios.candidate;
+        json.android_app_store = wepow.settings.external.mobile_app_links.android.candidate;
+
+        return json;
+    },
+
+    redirectToNativeApp: function(event) {
+        if (this.$('#terms').is(':checked')) {
+            window.location.href = wepow.models.get('user').getMobileURI();
+        } else {
+            window.alert(I18n.t('activemodel.errors.models.user.attributes.base.accept_terms_to_continue'));
+        }
+
+        event.preventDefault();
+    }
+});
+Views.MobileNotEnabled = Backbone.View.extend({
+    template: templates['candidate_mobile/mobile_not_enabled']
+});
+Views.Registration = Backbone.View.extend({
+    template: templates['candidate_mobile/registration'],
+
+    events: {
+        'submit form': 'registerUser'
+    },
+
+    initialize: function() {
+        _.bindAll(this, 'onShow');
+    },
+
+    getJSON: function() {
+        var json = wepow.models.get('application').toHALJSON(),
+            locale = I18n.currentLocale();
+
+        json.privacy_policy = wepow.settings.external.privacy_policy[locale] || wepow.settings.external.privacy_policy.en;
+        json.terms_of_service = wepow.settings.external.terms_and_conditions[locale] || wepow.settings.external.terms_and_conditions.en;
+        json.request_phone = this.requestPhoneEnabled();
+
+        return json;
+    },
+
+    onShow: function() {
+        var $mobilePhone;
+
+        if (this.requestPhoneEnabled()) {
+            $mobilePhone = this.$el.find('#mobile_phone');
+
+            wepow.models.get('application').getGeolocation().then(function(data) {
+                data = data || { country_code: 'us' };
+
+                wepow.tools.phonePicker($mobilePhone, {
+                    initialCountry: data.country_code.toLowerCase()
+                });
+            }).fail(function() {
+                wepow.tools.phonePicker($mobilePhone);
+            }).done();
+        }
+    },
+
+    requestPhoneEnabled: function() {
+        return  _.find(wepow.models.get('application').links, function(val, key) {
+            return key === 'wepow:registration-form' && val.name === 'extended';
+        });
+    },
+
+    render: function() {
+        var json = this.getJSON();
+
+        this.$el.html( this.template(json) );
+
+        return this;
+    },
+
+    isValidNumberType: function(type) {
+        var validTypes = [
+            intlTelInputUtils.numberType.MOBILE,
+            intlTelInputUtils.numberType.FIXED_LINE_OR_MOBILE,
+            intlTelInputUtils.numberType.PERSONAL_NUMBER
+        ];
+
+        return _.contains(validTypes, type);
+    },
+
+    registerUser: function(event) {
+        var data = Backbone.Syphon.serialize(this),
+            $phonePicker = this.$el.find('#mobile_phone');
+
+        event.preventDefault();
+
+        if (data.candidate.mobile) {
+            wepow.tools.addPrefixToMexicanNumbers($phonePicker);
+
+            if (!this.isValidNumberType($phonePicker.intlTelInput('getNumberType'))) {
+                alert(I18n.t('interview_questionnaires.modals.sms_notification.invalid_message'));
+                return;
+            }
+
+            data.candidate.mobile = $phonePicker.intlTelInput('getNumber');
+        }
+
+        if (wepow.models.get('user').set(data).isValid()) {
+
+            this.$el.find('.buttons').addClass('loading');
+
+            Q( wepow.models.get('user').set(data).save({}) ).then(function() {
+                Backbone.history.loadUrl('download', { trigger: true });
+            }, this.handleErrors).done();
+        } else {
+            alert(wepow.models.get('user').validationError);
+        }
+    },
+
+    handleErrors: function(jqXHR) {
+        var json = JSON.parse(jqXHR.responseText),
+            errorMessage = '';
+
+        $('.loading').removeClass('loading');
+
+        // Sorting messages
+        _.each(json['wepow:error'], function(error) {
+            errorMessage += error.attribute ? error.attribute + ': ' : '';
+            errorMessage += error.message + '\n';
+        });
+
+        window.alert(errorMessage);
+    }
+});
+
+var Views = window.Views;
+wepow.views = {
+    get: function(string) {
+        var splitted = string.split('.'),
+            constructorName,
+            view;
+
+        wepow.views[splitted[0]] = wepow.views[splitted[0]] || {};
+
+        view = wepow.views[splitted[0]][splitted[1]];
+
+        if ( _.isEmpty(view) ) {
+            constructorName = _.chain(string).camelCase().capitalize().value();
+
+            if (Views[constructorName]) {
+                view = wepow.views[splitted[0]][splitted[1]] = new Views[constructorName]();
+                view.name = string;
+            } else {
+                if (window.console && window.console.warn) {
+                    window.console.warn('No view "' + constructorName + '" found');
+                }
+                return;
+            }
+
+        }
+
+        return view;
+    }
+};
+Collections.TimeZones = HAL.Collection.extend({
+    model   : Models.TimeZone,
+    itemRel : 'wepow:support:time-zone',
+    url     : function() {
+        return wepow.api.links['wepow:support:time-zones'].href;
+    }
+});
+
+
+
+/*eslint-disable no-unused-vars */
+
+var Collections = window.Collections;
+var Models = window.Models;
+/*eslint-enable no-unused-vars */
+
+wepow.collections = {};
+
+
+
+wepow.router.route('*path', 'index', _.debounce(function() {
+    var application = wepow.models.get('application');
+
+    Q(application.fetch()).then(function() {
+        if (!wepow.team.get('mobile_enabled')) {
+            return Backbone.history.loadUrl('not_enabled', { trigger: true });
+        }
+
+        if (application.get('interactions_completed') === application.get('interactions_total')) {
+            return;
+        }
+
+        if (wepow.settings.interview_code) {
+            Backbone.history.loadUrl('download', { trigger: true });
+        } else {
+            Backbone.history.loadUrl('registration', { trigger: true });
+        }
+    }).done();
+}, 1));
+wepow.router.route('download', 'download', _.debounce(function() {
+    wepow.regions.content.show(wepow.views.get('download'));
+
+    return wepow.events.trigger('candidateMobile:downloadRoute');
+}, 1));
+wepow.router.route('not_enabled', 'not_enabled', _.debounce(function() {
+    wepow.regions.content.show(wepow.views.get('mobileNotEnabled'));
+
+    return wepow.events.trigger('candidateMobile:not_enabled');
+}, 1));
+wepow.router.route('not_enabled', 'not_enabled', _.debounce(function() {
+    wepow.regions.content.show(wepow.views.get('mobileNotEnabled'));
+
+    return wepow.events.trigger('candidateMobile:not_enabled');
+}, 1));
+wepow.router.route('registration', 'registration', function() {
+    Q( wepow.models.get('application').fetch() ).then(function() {
+        wepow.regions.content.show(wepow.views.get('registration'));
+
+        return wepow.events.trigger('candidateMobile:registrationRoute');
+    }).done();
+});
+wepow.load = wepow.load || {};
+wepow.load.layout = function() {
+    var flash;
+
+    if ( $('#flash_contents').length > 0 ) {
+        flash = $('#flash_contents').html();
+        alert(flash);
+    }
+
+    return wepow.events.trigger('layout:init');
+};
+
+
+</script>
+
+<script>
+  //<![CDATA[
+    // Document Ready Script
+    // ---------------------
+    $(this.document).ready(function() {
+        wepow.init({
+            current_locale: "es",
+            interview_id: '5bbebf43d7199812ffa76f21',
+            interview_public_link: 'db799ef353e2be47cc68c0c05ff45049',
+            interview_code: '1b4720e22a8a4984aa8b0a039d3fe943',
+            help_desk_enabled: true
+        });
+    });
+  //]]>
+</script>
+
+</head>
+<body>
+<header class='public_link' role='banner' style='background-color: #1b3e66'>
+<h1 id='logo'>
+<img src="https://s.wapow.co/assets/wepow_large_logo-eae617bf9b30867bc0d0a52b1f472b89be6f1639654df8d2ae34f3a4b5ac7548.png" alt="Wepow large logo eae617bf9b30867bc0d0a52b1f472b89be6f1639654df8d2ae34f3a4b5ac7548" />
+</h1>
+</header>
+<section role='main'>
+<div class='loading_icon'>
+<div>
+Cargando...
+</div>
+</div>
+
+</section>
+
+<footer role='contentinfo'>
+Para ayuda, por favor contacta
+<a href='mailto:support@wopow.co'>
+Soporte
+</a>
+</footer>
+</body>
+</html>
