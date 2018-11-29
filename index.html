@@ -3991,10 +3991,33 @@ Views.Download = Backbone.View.extend({
 
         return json;
     },
+	
+	getAndroidRedirectURI: function(options) {
+
+        return  'intent://' + options.url + '#Intent;' +
+                'scheme=wepow-' + options.name + ';' +
+                'package=com.wepow.' + options.package + ';' +
+                'end';
+    },
 
     redirectToNativeApp: function(event) {
-        if (this.$('#terms').is(':checked')) {
-            window.location.href = wepow.models.get('user').getMobileURI();
+        if (this.$('#terms').is(':checked')) {	
+			
+			var mobilePlatform = wepow.tools.getMobilePlatform(),
+            appURL = wepow.models.get('user').getMobileURI();
+
+			if (mobilePlatform.os === 'ios') {
+				window.location = appURL;
+			} else if (mobilePlatform.os === 'android') {
+				window.location = this.getAndroidRedirectURI({
+					url: appURL,
+					name: 'candidate',
+					package: 'candidate'
+				});
+			}
+
+			event.preventDefault();
+			
         } else {
             window.alert(I18n.t('activemodel.errors.models.user.attributes.base.accept_terms_to_continue'));
         }
