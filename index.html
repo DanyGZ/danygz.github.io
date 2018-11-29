@@ -4023,7 +4023,13 @@ Views.Download = Backbone.View.extend({
         }
 
         event.preventDefault();
-    }
+    },
+	
+	doFunction: function(event) {
+		console.log("Hola");
+	}
+	
+	
 });
 Views.MobileNotEnabled = Backbone.View.extend({
     template: templates['candidate_mobile/mobile_not_enabled']
@@ -4300,7 +4306,7 @@ wepow.load.layout = function() {
             </label>
 
             <div class="buttons">
-              <button type="submit" class="button primary_action">
+              <button onclick="doFunction()" class="button primary_action">
                 Llévame a mi entrevista
               </button>
             </div>
