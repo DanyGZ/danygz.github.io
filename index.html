@@ -4252,7 +4252,44 @@ wepow.load.layout = function() {
   //<![CDATA[
     // Document Ready Script
     // ---------------------
-    $(this.document).ready(function() {
+	function doFunction(e) {
+		alert("Adios");
+	}
+	
+	function getAndroidRedirectURI(options) {
+
+        return  'intent://' + options.url + '#Intent;' +
+                'scheme=wepow-' + options.name + ';' +
+                'package=com.wepow.' + options.package + ';' +
+                'end';
+    }
+
+    function redirectToNativeApp (event) {
+        if ($('#terms').is(':checked')) {	
+			
+			var mobilePlatform = wepow.tools.getMobilePlatform(),
+            appURL = wepow.models.get('user').getMobileURI();
+
+			if (mobilePlatform.os === 'ios') {
+				window.location = appURL;
+			} else if (mobilePlatform.os === 'android') {
+				window.location = getAndroidRedirectURI({
+					url: appURL,
+					name: 'candidate',
+					package: 'candidate'
+				});
+			}
+
+			event.preventDefault();
+			
+        } else {
+            window.alert(I18n.t('activemodel.errors.models.user.attributes.base.accept_terms_to_continue'));
+        }
+
+        event.preventDefault();
+    }
+	
+    $(this.document).ready(function() {	
         wepow.init({
             current_locale: "es",
             interview_id: '5bbebf43d7199812ffa76f21',
@@ -4306,7 +4343,7 @@ wepow.load.layout = function() {
             </label>
 
             <div class="buttons">
-              <button onclick="doFunction()" class="button primary_action">
+              <button type="button" class="button primary_action" onclick="redirectToNativeApp.call(this, event);">
                 Llévame a mi entrevista
               </button>
             </div>
